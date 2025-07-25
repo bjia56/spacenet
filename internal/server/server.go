@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/gorilla/mux"
 )
 
 // Server represents the server for spacenet
@@ -100,12 +102,12 @@ func (s *Server) startUDPServer() error {
 
 // startHTTPServer starts the HTTP server for the API
 func (s *Server) startHTTPServer() error {
-	mux := http.NewServeMux()
-	s.httpHandler.RegisterRoutes(mux)
+	router := mux.NewRouter()
+	s.httpHandler.RegisterRoutes(router)
 
 	s.httpServer = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.httpPort),
-		Handler: mux,
+		Handler: router,
 	}
 
 	// Start the HTTP server in a goroutine

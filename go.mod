@@ -3,6 +3,7 @@ module github.com/bjia56/spacenet
 go 1.21.1
 
 require (
+	github.com/gorilla/mux v1.8.1
 	github.com/redis/go-redis/v9 v9.5.1
 	github.com/spf13/cobra v1.9.1
 )

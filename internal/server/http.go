@@ -5,7 +5,8 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"strings"
+
+	"github.com/gorilla/mux"
 )
 
 // HTTPHandler implements HTTP endpoints for claim management
@@ -36,11 +37,11 @@ func NewHTTPHandler(store Store) *HTTPHandler {
 	}
 }
 
-// RegisterRoutes registers all HTTP routes on the provided mux
-func (h *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/ip/", h.handleGetClaimByIP)
-	mux.HandleFunc("/api/subnet/", h.handleGetStatsBySubnet)
-	mux.HandleFunc("/health", h.handleHealth)
+// RegisterRoutes registers all HTTP routes on the provided router
+func (h *HTTPHandler) RegisterRoutes(router *mux.Router) {
+	router.HandleFunc("/api/ip/{ip}", h.handleGetClaimByIP).Methods("GET")
+	router.HandleFunc("/api/subnet/{address}/{prefix}", h.handleGetStatsBySubnet).Methods("GET")
+	router.HandleFunc("/health", h.handleHealth).Methods("GET")
 }
 
 // handleHealth handles the health check endpoint
@@ -52,15 +53,14 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // handleGetClaimByIP returns the claim for a specific IP
 func (h *HTTPHandler) handleGetClaimByIP(w http.ResponseWriter, r *http.Request) {
-	// Extract IP from path: /api/claims/[ip]
-	path := strings.TrimPrefix(r.URL.Path, "/api/claims/")
-	if path == "" || path == r.URL.Path {
+	// Extract IP from URL variables
+	vars := mux.Vars(r)
+	ipAddr, ok := vars["ip"]
+	if !ok || ipAddr == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "IP address is required"})
 		return
 	}
-
-	ipAddr := path
 
 	// Validate the IP address
 	if net.ParseIP(ipAddr) == nil {
@@ -91,15 +91,12 @@ func (h *HTTPHandler) handleGetClaimByIP(w http.ResponseWriter, r *http.Request)
 
 // handleGetStatsSubnet returns statistics for a specified IPv6 subnet
 func (h *HTTPHandler) handleGetStatsBySubnet(w http.ResponseWriter, r *http.Request) {
-	// Extract subnet from path: /api/subnet/[subnet]
-	path := strings.TrimPrefix(r.URL.Path, "/api/subnet/")
-	if path == "" || path == r.URL.Path {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Subnet is required"})
-		return
-	}
+	vars := mux.Vars(r)
+	var subnetStr string
 
-	subnetStr := path
+	address := vars["address"]
+	prefix := vars["prefix"]
+	subnetStr = address + "/" + prefix
 
 	// Get subnet statistics
 	stats, ok := h.store.GetSubnetStats(subnetStr)
