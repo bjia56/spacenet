@@ -4,6 +4,8 @@ import (
 	"math/big"
 	"net"
 	"sync"
+
+	"github.com/bjia56/spacenet/api"
 )
 
 // IPTree represents a hierarchical structure for managing IPv6 address claims
@@ -41,15 +43,7 @@ type IPNode struct {
 	children map[string]*IPNode
 }
 
-// SubnetStats represents statistics about a subnet
-type SubnetStats struct {
-	Subnet             string             `json:"subnet"`
-	TotalAddresses     string             `json:"totalAddresses"`
-	ClaimedAddresses   string             `json:"claimedAddresses"`
-	DominantClaimant   string             `json:"dominantClaimant"`
-	DominantPercentage float64            `json:"dominantPercentage"`
-	AllClaimants       map[string]float64 `json:"allClaimants"` // Map of claimant to percentage
-}
+// Import the shared SubnetStats type from the api package
 
 // NewIPTree creates a new IP tree
 func NewIPTree() *IPTree {
@@ -242,7 +236,7 @@ func (t *IPTree) removeFromSubnet(ip net.IP, prefixLen int, claimant string) {
 }
 
 // GetSubnetStats gets statistics for a subnet
-func (t *IPTree) GetSubnetStats(subnetStr string) (*SubnetStats, bool) {
+func (t *IPTree) GetSubnetStats(subnetStr string) (*api.SubnetStats, bool) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -294,7 +288,7 @@ func (t *IPTree) GetSubnetStats(subnetStr string) (*SubnetStats, bool) {
 	child, exists := node.children[subnetStr]
 	if !exists {
 		// No data for this subnet
-		return &SubnetStats{
+		return &api.SubnetStats{
 			Subnet:             subnetStr,
 			TotalAddresses:     new(big.Int).Exp(big.NewInt(2), big.NewInt(128-int64(prefixLen)), nil).String(),
 			ClaimedAddresses:   "0",
@@ -314,7 +308,7 @@ func (t *IPTree) GetSubnetStats(subnetStr string) (*SubnetStats, bool) {
 		allClaimants[claimant] = percentage * 100.0
 	}
 
-	return &SubnetStats{
+	return &api.SubnetStats{
 		Subnet:             subnetStr,
 		TotalAddresses:     child.totalAddresses.String(),
 		ClaimedAddresses:   child.claimedCount.String(),
@@ -325,7 +319,7 @@ func (t *IPTree) GetSubnetStats(subnetStr string) (*SubnetStats, bool) {
 }
 
 // GetAllSubnets gets statistics for all tracked subnets with the given prefix length
-func (t *IPTree) GetAllSubnets(prefixLen int) []SubnetStats {
+func (t *IPTree) GetAllSubnets(prefixLen int) []api.SubnetStats {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -340,10 +334,10 @@ func (t *IPTree) GetAllSubnets(prefixLen int) []SubnetStats {
 	}
 
 	if !validPrefix {
-		return []SubnetStats{}
+		return []api.SubnetStats{}
 	}
 
-	results := []SubnetStats{}
+	results := []api.SubnetStats{}
 
 	// Find all subnets with this prefix
 	for subnetStr, node := range t.root.children {
@@ -360,7 +354,7 @@ func (t *IPTree) GetAllSubnets(prefixLen int) []SubnetStats {
 				}
 			}
 
-			stats := SubnetStats{
+			stats := api.SubnetStats{
 				Subnet:             subnetStr,
 				TotalAddresses:     node.totalAddresses.String(),
 				ClaimedAddresses:   node.claimedCount.String(),

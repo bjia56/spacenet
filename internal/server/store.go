@@ -1,5 +1,9 @@
 package server
 
+import (
+	"github.com/bjia56/spacenet/api"
+)
+
 // Store defines the interface for claim storage backends
 type Store interface {
 	// ProcessClaim processes a claim request and updates the store
@@ -12,10 +16,10 @@ type Store interface {
 	GetAllClaims() map[string]string
 
 	// GetSubnetStats retrieves statistics for a specific subnet
-	GetSubnetStats(subnet string) (*SubnetStats, bool)
+	GetSubnetStats(subnet string) (*api.SubnetStats, bool)
 
 	// GetAllSubnets retrieves statistics for all tracked subnets with the given prefix length
-	GetAllSubnets(prefixLen int) []SubnetStats
+	GetAllSubnets(prefixLen int) []api.SubnetStats
 
 	// Close releases any resources held by the store
 	Close() error

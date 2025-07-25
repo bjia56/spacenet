@@ -7,6 +7,8 @@
 *.dll
 *.so
 *.dylib
+spacenet
+cmd/client/client
 
 # Test binary, built with `go test -c`
 *.test
@@ -31,5 +33,5 @@ go.work.sum
 # .idea/
 # .vscode/
 
-spacenet
-cmd/client/client
+# Log
+*.log

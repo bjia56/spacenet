@@ -6,28 +6,13 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/bjia56/spacenet/api"
 	"github.com/gorilla/mux"
 )
 
 // HTTPHandler implements HTTP endpoints for claim management
 type HTTPHandler struct {
 	store Store
-}
-
-// ClaimResponse represents the JSON response for a claim
-type ClaimResponse struct {
-	IP       string `json:"ip"`
-	Claimant string `json:"claimant"`
-}
-
-// SubnetResponse represents the JSON response for subnet statistics
-type SubnetResponse struct {
-	Subnet             string             `json:"subnet"`
-	TotalAddresses     string             `json:"totalAddresses"`
-	ClaimedAddresses   string             `json:"claimedAddresses"`
-	DominantClaimant   string             `json:"dominantClaimant"`
-	DominantPercentage float64            `json:"dominantPercentage"`
-	AllClaimants       map[string]float64 `json:"allClaimants"`
 }
 
 // NewHTTPHandler creates a new HTTP handler with the given store
@@ -77,7 +62,7 @@ func (h *HTTPHandler) handleGetClaimByIP(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	response := ClaimResponse{
+	response := api.ClaimResponse{
 		IP:       ipAddr,
 		Claimant: claimant,
 	}
@@ -107,7 +92,7 @@ func (h *HTTPHandler) handleGetStatsBySubnet(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Convert to response format
-	response := SubnetResponse{
+	response := api.SubnetResponse{
 		Subnet:             stats.Subnet,
 		TotalAddresses:     stats.TotalAddresses,
 		ClaimedAddresses:   stats.ClaimedAddresses,
