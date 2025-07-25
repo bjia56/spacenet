@@ -1,48 +1,59 @@
 package main
 
 import (
-	"flag"
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 
 	"github.com/bjia56/spacenet/internal/server"
+	"github.com/spf13/cobra"
+)
+
+var (
+	port      int
+	redisAddr string
+	useRedis  bool
 )
 
 func main() {
-	// Parse command line flags
-	port := flag.Int("port", 1337, "UDP port to listen on")
-	redisAddr := flag.String("redis", "localhost:6379", "Redis address (host:port)")
-	useInMemory := flag.Bool("memory", false, "Use in-memory store instead of Redis")
-	flag.Parse()
-
-	// Allow overriding settings via environment variables
-	if envPort := os.Getenv("SPACENET_PORT"); envPort != "" {
-		if p, err := strconv.Atoi(envPort); err == nil {
-			*port = p
-		}
-	}
-	if envRedis := os.Getenv("SPACENET_REDIS_ADDR"); envRedis != "" {
-		*redisAddr = envRedis
-	}
-	if envMemory := os.Getenv("SPACENET_USE_MEMORY"); envMemory != "" {
-		*useInMemory = envMemory == "1" || envMemory == "true"
+	rootCmd := &cobra.Command{
+		Use:   "spacenet",
+		Short: "An IPv6 territory control game",
+		Long:  "A space-themed network control game where players claim IPv6 addresses by sending UDP packets.",
+		Run: func(cmd *cobra.Command, args []string) {
+			runServer()
+		},
 	}
 
-	log.Printf("Starting SpaceNet server on port %d", *port)
-	if *useInMemory {
+	// Define flags
+	rootCmd.Flags().IntVarP(&port, "port", "p", 1337, "UDP port to listen on")
+	rootCmd.Flags().StringVarP(&redisAddr, "redis", "r", "", "Redis address (host:port), if not specified in-memory store is used")
+
+	// Parse flags and check if Redis address was explicitly set
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		useRedis = redisAddr != ""
+	}
+
+	if err := rootCmd.Execute(); err != nil {
+		log.Fatalf("Failed to execute command: %v", err)
+	}
+}
+
+// runServer starts the SpaceNet server with the configured options
+func runServer() {
+	log.Printf("Starting SpaceNet server on port %d", port)
+	if !useRedis {
 		log.Println("Using in-memory store")
 	} else {
-		log.Printf("Using Redis store at %s", *redisAddr)
+		log.Printf("Using Redis store at %s", redisAddr)
 	}
 
 	// Create a new server with options
 	srv := server.NewServerWithOptions(server.ServerOptions{
-		Port:        *port,
-		RedisAddr:   *redisAddr,
-		UseInMemory: *useInMemory,
+		Port:        port,
+		RedisAddr:   redisAddr,
+		UseInMemory: !useRedis,
 	})
 
 	// Start the server
