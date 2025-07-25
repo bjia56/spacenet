@@ -12,6 +12,9 @@ type ClaimStore struct {
 	claims map[string]string // map[ipAddress]claimantName
 }
 
+// Verify ClaimStore implements Store interface
+var _ Store = (*ClaimStore)(nil)
+
 // NewClaimStore creates a new in-memory claim store
 func NewClaimStore() *ClaimStore {
 	return &ClaimStore{
@@ -20,18 +23,13 @@ func NewClaimStore() *ClaimStore {
 }
 
 // ProcessClaim processes a claim request and updates the store
-func (cs *ClaimStore) ProcessClaim(ipAddr string, claimant string) (bool, string) {
+// Note: Updated to overwrite existing claims as per new requirements
+func (cs *ClaimStore) ProcessClaim(ipAddr string, claimant string) error {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
-
-	if existingClaimant, exists := cs.claims[ipAddr]; exists {
-		// Address already claimed
-		return false, existingClaimant
-	}
-
-	// Store new claim
+	// Store new claim (overwriting existing one if any)
 	cs.claims[ipAddr] = claimant
-	return true, ""
+	return nil
 }
 
 // GetClaim retrieves the claimant for an IP address
@@ -57,18 +55,52 @@ func (cs *ClaimStore) GetAllClaims() map[string]string {
 	return claims
 }
 
+// Close releases any resources held by the store
+// For in-memory store, this is a no-op
+func (cs *ClaimStore) Close() error {
+	return nil
+}
+
 // Server represents the UDP server for spacenet
 type Server struct {
-	store    *ClaimStore
+	store    Store
 	listener *net.UDPConn
 	port     int
 }
 
-// NewServer creates a new spacenet server instance
+// ServerOptions holds configuration options for the server
+type ServerOptions struct {
+	Port        int
+	RedisAddr   string // Format: "host:port"
+	UseInMemory bool   // If true, use in-memory store instead of Redis
+}
+
+// NewServer creates a new spacenet server instance with default options
 func NewServer(port int) *Server {
+	return NewServerWithOptions(ServerOptions{
+		Port:        port,
+		UseInMemory: true,
+	})
+}
+
+// NewServerWithOptions creates a new spacenet server instance with custom options
+func NewServerWithOptions(opts ServerOptions) *Server {
+	var store Store
+
+	if opts.UseInMemory {
+		store = NewClaimStore()
+	} else {
+		// Use Redis
+		redisStore, err := NewRedisStore(opts.RedisAddr)
+		if err != nil {
+			log.Fatalf("Failed to connect to Redis at %s: %v", opts.RedisAddr, err)
+		}
+		store = redisStore
+	}
+
 	return &Server{
-		store: NewClaimStore(),
-		port:  port,
+		store: store,
+		port:  opts.Port,
 	}
 }
 
@@ -99,6 +131,10 @@ func (s *Server) Stop() {
 	if s.listener != nil {
 		s.listener.Close()
 	}
+
+	if s.store != nil {
+		s.store.Close()
+	}
 }
 
 // processPackets handles incoming UDP packets
@@ -118,15 +154,8 @@ func (s *Server) processPackets() {
 				// Process the claim
 				clientIP := job.addr.IP.String()
 				claimantName := string(job.data)
-
-				success, existingClaimant := s.store.ProcessClaim(clientIP, claimantName)
-
-				if success {
-					log.Printf("Address %s claimed by %s", clientIP, claimantName)
-				} else {
-					log.Printf("Address %s already claimed by %s, rejected claim from %s",
-						clientIP, existingClaimant, claimantName)
-				}
+				s.store.ProcessClaim(clientIP, claimantName)
+				log.Printf("Address %s claimed by %s", clientIP, claimantName)
 			}
 		}(i)
 	}
