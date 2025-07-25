@@ -5,7 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
+	"os/exec"
+	"strings"
 )
 
 func main() {
@@ -13,26 +14,20 @@ func main() {
 	name := flag.String("name", "Anonymous", "Your name for the claim")
 	server := flag.String("server", "::1", "IPv6 address of the server")
 	port := flag.Int("port", 1337, "Port number of the server")
+	source := flag.String("source", "", "Source IP address to claim (optional)")
 	flag.Parse()
 
-	// Resolve server address
-	serverAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(*server, fmt.Sprintf("%d", *port)))
-	if err != nil {
-		log.Fatalf("Failed to resolve server address: %v", err)
+	// Build sendip command
+	cmd := []string{"sendip", "-d", *name, "-p", "ipv6"}
+	if *source != "" {
+		cmd = append(cmd, "-6s", *source)
 	}
+	cmd = append(cmd, "-p", "udp", "-ud", fmt.Sprintf("%d", *port), *server)
 
-	// Create a UDP connection
-	conn, err := net.DialUDP("udp", nil, serverAddr)
+	// Exec sendip command
+	err := exec.Command("sudo", "sh", "-c", strings.Join(cmd, " ")).Run()
 	if err != nil {
-		log.Fatalf("Failed to connect to server: %v", err)
-	}
-	defer conn.Close()
-
-	// Send the claim
-	log.Printf("Sending claim from %s to %s", conn.LocalAddr(), serverAddr)
-	_, err = conn.Write([]byte(*name))
-	if err != nil {
-		log.Fatalf("Failed to send claim: %v", err)
+		log.Fatalf("Failed to execute sendip command: %v", err)
 	}
 
 	log.Printf("Claim sent successfully!")
