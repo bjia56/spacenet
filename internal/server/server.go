@@ -1,55 +1,83 @@
 package server
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"net"
+	"net/http"
+	"time"
 )
 
-// Server represents the UDP server for spacenet
+// Server represents the server for spacenet
 type Server struct {
-	store    Store
-	listener *net.UDPConn
-	port     int
+	store       Store
+	listener    *net.UDPConn
+	httpServer  *http.Server
+	port        int
+	httpPort    int
+	httpHandler *HTTPHandler
 }
 
 // ServerOptions holds configuration options for the server
 type ServerOptions struct {
-	Port        int
-	RedisAddr   string // Format: "host:port"
-	UseInMemory bool   // If true, use in-memory store instead of Redis
+	Port      int
+	HTTPPort  int
+	RedisAddr string // Format: "host:port"
 }
 
 // NewServer creates a new spacenet server instance with default options
 func NewServer(port int) *Server {
 	return NewServerWithOptions(ServerOptions{
-		Port:        port,
-		UseInMemory: true,
+		Port:     port,
+		HTTPPort: 8080,
 	})
 }
 
 // NewServerWithOptions creates a new spacenet server instance with custom options
 func NewServerWithOptions(opts ServerOptions) *Server {
 	var store Store
+	var err error
 
-	if opts.UseInMemory {
+	if opts.RedisAddr == "" {
 		store = NewClaimStore()
 	} else {
-		// Use Redis
-		redisStore, err := NewRedisStore(opts.RedisAddr)
+		// Use ClaimStore with Redis backend
+		store, err = NewClaimStoreWithRedis(opts.RedisAddr)
 		if err != nil {
 			log.Fatalf("Failed to connect to Redis at %s: %v", opts.RedisAddr, err)
 		}
-		store = redisStore
 	}
 
+	// Create HTTP handler for API endpoints
+	httpHandler := NewHTTPHandler(store)
+
 	return &Server{
-		store: store,
-		port:  opts.Port,
+		store:       store,
+		port:        opts.Port,
+		httpPort:    opts.HTTPPort,
+		httpHandler: httpHandler,
 	}
 }
 
 // Start starts the spacenet server
 func (s *Server) Start() error {
+	// Start UDP server for claims
+	if err := s.startUDPServer(); err != nil {
+		return fmt.Errorf("failed to start UDP server: %w", err)
+	}
+
+	// Start HTTP server for API endpoints
+	if err := s.startHTTPServer(); err != nil {
+		s.stopUDPServer() // Clean up UDP server if HTTP fails
+		return fmt.Errorf("failed to start HTTP server: %w", err)
+	}
+
+	return nil
+}
+
+// startUDPServer starts the UDP server for receiving claims
+func (s *Server) startUDPServer() error {
 	// Listen for UDP packets on the specified port
 	addr := net.UDPAddr{
 		Port: s.port,
@@ -62,7 +90,7 @@ func (s *Server) Start() error {
 	}
 	s.listener = conn
 
-	log.Printf("SpaceNet server listening on [%s]:%d", addr.IP, s.port)
+	log.Printf("SpaceNet UDP server listening on [%s]:%d", addr.IP, s.port)
 
 	// Start processing packets
 	go s.processPackets()
@@ -70,14 +98,57 @@ func (s *Server) Start() error {
 	return nil
 }
 
-// Stop stops the spacenet server
-func (s *Server) Stop() {
-	if s.listener != nil {
-		s.listener.Close()
+// startHTTPServer starts the HTTP server for the API
+func (s *Server) startHTTPServer() error {
+	mux := http.NewServeMux()
+	s.httpHandler.RegisterRoutes(mux)
+
+	s.httpServer = &http.Server{
+		Addr:    fmt.Sprintf(":%d", s.httpPort),
+		Handler: mux,
 	}
+
+	// Start the HTTP server in a goroutine
+	go func() {
+		log.Printf("SpaceNet HTTP server listening on :%d", s.httpPort)
+		if err := s.httpServer.ListenAndServe(); err != http.ErrServerClosed {
+			log.Printf("HTTP server error: %v", err)
+		}
+	}()
+
+	return nil
+}
+
+// Stop stops all server components
+func (s *Server) Stop() {
+	s.stopHTTPServer()
+	s.stopUDPServer()
 
 	if s.store != nil {
 		s.store.Close()
+	}
+}
+
+// stopUDPServer stops the UDP server
+func (s *Server) stopUDPServer() {
+	if s.listener != nil {
+		s.listener.Close()
+		s.listener = nil
+	}
+}
+
+// stopHTTPServer stops the HTTP server
+func (s *Server) stopHTTPServer() {
+	if s.httpServer != nil {
+		// Create a context with timeout for graceful shutdown
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		if err := s.httpServer.Shutdown(ctx); err != nil {
+			log.Printf("Error shutting down HTTP server: %v", err)
+		}
+
+		s.httpServer = nil
 	}
 }
 

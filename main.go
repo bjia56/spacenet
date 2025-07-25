@@ -12,8 +12,8 @@ import (
 
 var (
 	port      int
+	httpPort  int
 	redisAddr string
-	useRedis  bool
 )
 
 func main() {
@@ -28,12 +28,8 @@ func main() {
 
 	// Define flags
 	rootCmd.Flags().IntVarP(&port, "port", "p", 1337, "UDP port to listen on")
+	rootCmd.Flags().IntVar(&httpPort, "http-port", 8080, "HTTP port for the REST API")
 	rootCmd.Flags().StringVarP(&redisAddr, "redis", "r", "", "Redis address (host:port), if not specified in-memory store is used")
-
-	// Parse flags and check if Redis address was explicitly set
-	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
-		useRedis = redisAddr != ""
-	}
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatalf("Failed to execute command: %v", err)
@@ -42,8 +38,8 @@ func main() {
 
 // runServer starts the SpaceNet server with the configured options
 func runServer() {
-	log.Printf("Starting SpaceNet server on port %d", port)
-	if !useRedis {
+	log.Printf("Starting SpaceNet server on UDP port %d and HTTP port %d", port, httpPort)
+	if redisAddr == "" {
 		log.Println("Using in-memory store")
 	} else {
 		log.Printf("Using Redis store at %s", redisAddr)
@@ -51,9 +47,9 @@ func runServer() {
 
 	// Create a new server with options
 	srv := server.NewServerWithOptions(server.ServerOptions{
-		Port:        port,
-		RedisAddr:   redisAddr,
-		UseInMemory: !useRedis,
+		Port:      port,
+		HTTPPort:  httpPort,
+		RedisAddr: redisAddr,
 	})
 
 	// Start the server
