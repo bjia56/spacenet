@@ -143,11 +143,6 @@ func (cs *ClaimStore) GetSubnetStats(subnet string) (*SubnetStats, bool) {
 	return cs.ipTree.GetSubnetStats(subnet)
 }
 
-// GetAllSubnets retrieves statistics for all tracked subnets with the given prefix length
-func (cs *ClaimStore) GetAllSubnets(prefixLen int) []SubnetStats {
-	return cs.ipTree.GetAllSubnets(prefixLen)
-}
-
 // GetAllClaims returns all claims in the store
 func (cs *ClaimStore) GetAllClaims() map[string]string {
 	cs.mutex.RLock()

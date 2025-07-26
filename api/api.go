@@ -9,7 +9,6 @@ type ClaimResponse struct {
 
 // SubnetResponse represents the JSON response for subnet statistics
 type SubnetResponse struct {
-	Subnet     string  `json:"subnet"`
-	Owner      string  `json:"owner"`
-	Percentage float64 `json:"percentage"`
+	Owner      string  `json:"owner,omitempty"`
+	Percentage float64 `json:"percentage,omitempty"`
 }

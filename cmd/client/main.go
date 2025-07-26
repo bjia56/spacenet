@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/bjia56/gosendip"
@@ -42,15 +43,17 @@ const (
 )
 
 type UnitTables [8]table.Model
+type UnitColumns [3]table.Column
 
 func (ut *UnitTables) Initialize() {
-	columns := []table.Column{
+	columns := UnitColumns{
 		{Title: "Subnet", Width: 50},
 		{Title: "Owner", Width: 30},
+		{Title: "Percentage", Width: 20},
 	}
 	for i := range ut {
 		ut[i] = table.New(
-			table.WithColumns(columns),
+			table.WithColumns([]table.Column(columns[:])),
 			table.WithRows([]table.Row{}),
 			table.WithFocused(true),
 			table.WithHeight(10),
@@ -67,6 +70,11 @@ func (ut *UnitTables) SetHeight(height int) {
 func (ut *UnitTables) SetWidth(width int) {
 	for i := range ut {
 		ut[i].SetWidth(width)
+		columns := ut[i].Columns()
+		columns[0].Width = (width * 5) / 10
+		columns[1].Width = (width * 3) / 10
+		columns[2].Width = width - (columns[0].Width + columns[1].Width) - 6
+		ut[i].SetColumns(columns)
 	}
 }
 
@@ -155,6 +163,7 @@ func (m *Model) PopulateTable(prefix string, level level) {
 		row := table.Row{
 			makeIPv6Full(i, prefix, level),
 			"", // Placeholder for owner
+			"", // Placeholder for percentage
 		}
 		rows = append(rows, row)
 	}
@@ -195,6 +204,9 @@ func (m *Model) FetchClaims(prefix string, level level, start, end int) {
 		// Update the table with the claim
 		row := m.unitTables[level].Rows()[i]
 		row[1] = subnetResp.Owner
+		if subnetResp.Percentage > 0 {
+			row[2] = strconv.FormatFloat(subnetResp.Percentage, 'f', 2, 64) + "%"
+		}
 		m.unitTables[level].SetRows(m.unitTables[level].Rows())
 	}
 }

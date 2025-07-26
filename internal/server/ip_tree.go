@@ -3,7 +3,6 @@ package server
 import (
 	"math/big"
 	"net"
-	"slices"
 	"sync"
 )
 
@@ -293,7 +292,6 @@ func (t *IPTree) GetSubnetStats(subnetStr string) (*SubnetStats, bool) {
 	if !exists {
 		// No data for this subnet
 		return &SubnetStats{
-			Subnet:     subnetStr,
 			Owner:      "",
 			Percentage: 0,
 		}, true
@@ -302,48 +300,13 @@ func (t *IPTree) GetSubnetStats(subnetStr string) (*SubnetStats, bool) {
 	if child.dominantPercentage <= 50.0 {
 		// If no dominant claimant, return empty stats
 		return &SubnetStats{
-			Subnet:     subnetStr,
 			Owner:      "",
 			Percentage: 0,
 		}, true
 	}
 
 	return &SubnetStats{
-		Subnet:     subnetStr,
 		Owner:      child.dominantClaimant,
 		Percentage: child.dominantPercentage,
 	}, true
-}
-
-// GetAllSubnets gets statistics for all tracked subnets with the given prefix length
-func (t *IPTree) GetAllSubnets(prefixLen int) []SubnetStats {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	// Validate prefix length
-	validPrefix := false
-	stdPrefixes := []int{16, 32, 48, 64, 80, 96, 112, 128}
-	if slices.Contains(stdPrefixes, prefixLen) {
-		validPrefix = true
-	}
-
-	if !validPrefix {
-		return []SubnetStats{}
-	}
-
-	results := []SubnetStats{}
-
-	// Find all subnets with this prefix
-	for subnetStr, node := range t.root.children {
-		if node.prefixLen == prefixLen {
-			stats := SubnetStats{
-				Subnet:     subnetStr,
-				Owner:      node.dominantClaimant,
-				Percentage: node.dominantPercentage,
-			}
-			results = append(results, stats)
-		}
-	}
-
-	return results
 }

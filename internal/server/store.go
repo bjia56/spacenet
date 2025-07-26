@@ -19,9 +19,6 @@ type Store interface {
 	// GetSubnetStats retrieves statistics for a specific subnet
 	GetSubnetStats(subnet string) (*SubnetStats, bool)
 
-	// GetAllSubnets retrieves statistics for all tracked subnets with the given prefix length
-	GetAllSubnets(prefixLen int) []SubnetStats
-
 	// Close releases any resources held by the store
 	Close() error
 }
