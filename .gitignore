@@ -7,8 +7,8 @@
 *.dll
 *.so
 *.dylib
-spacenet
-cmd/client/client
+server/server
+tui/tui
 
 # Test binary, built with `go test -c`
 *.test

@@ -1,6 +1,6 @@
 package server
 
-import "github.com/bjia56/spacenet/api"
+import "github.com/bjia56/spacenet/server/api"
 
 // SubnetStats represents statistics about a subnet
 type SubnetStats = api.SubnetResponse

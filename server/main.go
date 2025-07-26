@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/bjia56/spacenet/internal/server"
+	"github.com/bjia56/spacenet/server/internal/server"
 	"github.com/spf13/cobra"
 )
 

@@ -6,7 +6,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/bjia56/spacenet/api"
+	"github.com/bjia56/spacenet/server/api"
 	"github.com/gorilla/mux"
 )
 

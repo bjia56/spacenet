@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/bjia56/gosendip"
-	"github.com/bjia56/spacenet/api"
+	"github.com/bjia56/spacenet/server/api"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
