@@ -13,7 +13,6 @@ import (
 	"github.com/bjia56/gosendip"
 	"github.com/bjia56/spacenet/server/api"
 	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -106,10 +105,13 @@ type Model struct {
 	udpPort    int
 	name       string
 
-	unitTables   UnitTables // Tables for displaying subnets with fun names
-	shadowTables UnitTables // For shadowing the current table with actual IPv6 addresses
-	selections   [8]string  // Selected subnets for each table level
-	viewing      level
+	unitTables    UnitTables // Tables for displaying subnets with fun names
+	shadowTables  UnitTables // For shadowing the current table with actual IPv6 addresses
+	selections    [8]string  // Selected subnets for each table level
+	viewing       level
+	refreshClaims bool // Whether to refresh claims on the next update
+
+	galaxy *Galaxy // Galaxy model for visual representation
 
 	statusMessage string
 	errorMessage  string
@@ -132,14 +134,17 @@ func makeIPv6Full(i int, prefix string, level level) (string, int) {
 // Initialize returns an initial model
 func Initialize(serverAddr string, httpPort, udpPort int, name string) *Model {
 	m := &Model{
-		serverAddr: serverAddr,
-		httpPort:   httpPort,
-		udpPort:    udpPort,
-		name:       name,
+		serverAddr:    serverAddr,
+		httpPort:      httpPort,
+		udpPort:       udpPort,
+		name:          name,
+		refreshClaims: true,
+		galaxy:        &Galaxy{},
 	}
 	m.unitTables.Initialize()
 	m.shadowTables.Initialize()
 	m.PopulateTable("", t16)
+	m.galaxy.Initialize()
 	return m
 }
 
@@ -232,7 +237,9 @@ func (m *Model) GetParentSelection(level level) string {
 
 // Init initializes the application
 func (m *Model) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(
+		m.galaxy.Init(),
+	)
 }
 
 // Update handles user input and updates the model
@@ -243,7 +250,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		reserved := 6
 		m.unitTables.SetHeight(msg.Height - reserved)
-		m.unitTables.SetWidth(msg.Width - 2)
+		m.unitTables.SetWidth((msg.Width / 2) - 2)
+		m.galaxy.SetDimensions(m.unitTables[0].Width(), m.unitTables[0].Height())
 
 	case tea.KeyMsg:
 		m.statusMessage = ""
@@ -256,6 +264,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			if m.viewing > 0 {
 				m.viewing--
+				m.refreshClaims = true
 			}
 
 		case "enter":
@@ -277,21 +286,36 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.statusMessage = ""
 				}
 			}
+			m.refreshClaims = true
 		}
 	}
 
 	// Update the selected row in the current table
+	lastCursor := m.unitTables[m.viewing].Cursor()
 	t, cmd := m.unitTables[m.viewing].Update(msg)
 	m.unitTables[m.viewing] = t
 	cmds = append(cmds, cmd)
+	if lastCursor != m.unitTables[m.viewing].Cursor() {
+		m.refreshClaims = true // Refresh claims if cursor changed
+	}
+
+	// Update the galaxy model
+	g, cmd := m.galaxy.Update(msg)
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	m.galaxy = g.(*Galaxy)
 
 	return m, tea.Batch(cmds...)
 }
 
 // View renders the current state of the model
 func (m *Model) View() string {
-	activeTable := m.unitTables[m.viewing]
-	m.FetchClaims(m.GetParentSelection(m.viewing), m.viewing, activeTable.Cursor()-activeTable.Height(), activeTable.Cursor()+activeTable.Height())
+	if m.refreshClaims {
+		activeTable := m.unitTables[m.viewing]
+		m.FetchClaims(m.GetParentSelection(m.viewing), m.viewing, activeTable.Cursor()-activeTable.Height(), activeTable.Cursor()+activeTable.Height())
+		m.refreshClaims = false
+	}
 
 	msg := m.statusMessage
 	if m.errorMessage != "" {
@@ -299,8 +323,11 @@ func (m *Model) View() string {
 	}
 
 	return titleStyle.Render("SpaceNet Browser") + "\n\n" +
-		tableStyle.Render(m.unitTables[m.viewing].View()) + "\n" +
-		msg + "\n" +
+		lipgloss.JoinHorizontal(
+			lipgloss.Bottom,
+			tableStyle.Render(m.unitTables[m.viewing].View()),
+			tableStyle.Render(m.galaxy.View()),
+		) + "\n" + msg + "\n" +
 		helpStyle("enter: select subnet, esc: back, q: quit")
 }
 
