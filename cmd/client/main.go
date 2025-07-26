@@ -1,4 +1,3 @@
-// A TUI client for the SpaceNet server
 package main
 
 import (
@@ -89,15 +88,15 @@ var unitMappings = [8]string{
 	t112: "Planet",
 	t128: "City",
 }
-var subnetMappings = [8]string{
-	t16:  "16",
-	t32:  "32",
-	t48:  "48",
-	t64:  "64",
-	t80:  "80",
-	t96:  "96",
-	t112: "112",
-	t128: "128",
+var subnetMappings = [8]int{
+	t16:  16,
+	t32:  32,
+	t48:  48,
+	t64:  64,
+	t80:  80,
+	t96:  96,
+	t112: 112,
+	t128: 128,
 }
 
 // Model represents the state of our application
@@ -107,15 +106,16 @@ type Model struct {
 	udpPort    int
 	name       string
 
-	unitTables UnitTables
-	selections [8]string // Selected subnets for each table level
-	viewing    level
+	unitTables   UnitTables // Tables for displaying subnets with fun names
+	shadowTables UnitTables // For shadowing the current table with actual IPv6 addresses
+	selections   [8]string  // Selected subnets for each table level
+	viewing      level
 
 	statusMessage string
 	errorMessage  string
 }
 
-func makeIPv6Full(i int, prefix string, level level) string {
+func makeIPv6Full(i int, prefix string, level level) (string, int) {
 	makeFull := func() string {
 		hex := fmt.Sprintf("%04x", i)
 		numSubBlocks := 8 - (int(level) + 1)
@@ -126,7 +126,7 @@ func makeIPv6Full(i int, prefix string, level level) string {
 		return fmt.Sprintf("%s%s%s", prefix, hex, zeroBlocks)
 	}
 	full := makeFull()
-	return full + "/" + subnetMappings[level]
+	return full, subnetMappings[level]
 }
 
 // Initialize returns an initial model
@@ -138,6 +138,7 @@ func Initialize(serverAddr string, httpPort, udpPort int, name string) *Model {
 		name:       name,
 	}
 	m.unitTables.Initialize()
+	m.shadowTables.Initialize()
 	m.PopulateTable("", t16)
 	return m
 }
@@ -159,22 +160,31 @@ func (m *Model) SendClaim(ip string) (string, error) {
 // PopulateTable populates a table with 2^16 rows
 func (m *Model) PopulateTable(prefix string, level level) {
 	rows := make([]table.Row, 0, 1<<16)
+	shadowRows := make([]table.Row, 0, 1<<16)
 	for i := range 1 << 16 {
-		row := table.Row{
-			makeIPv6Full(i, prefix, level),
-			"", // Placeholder for owner
-			"", // Placeholder for percentage
+		addr, subnet := makeIPv6Full(i, prefix, level)
+		name, err := GenerateName(addr, subnet)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to generate name for %s: %v", addr, err))
 		}
-		rows = append(rows, row)
+		rows = append(rows, table.Row{
+			name,
+			"", // Placeholder for owner,
+			"", // Placeholder for percentage
+		})
+		shadowRows = append(shadowRows, table.Row{
+			fmt.Sprintf("%s/%d", addr, subnet),
+		})
 	}
 	m.unitTables[level].SetRows(rows)
+	m.shadowTables[level].SetRows(shadowRows)
 }
 
 // FetchClaims fetches claims for a range of subnets
 func (m *Model) FetchClaims(prefix string, level level, start, end int) {
 	for i := max(start, 0); i < min(end, 1<<16); i++ {
-		shorthand := makeIPv6Full(i, prefix, level)
-		serverUrl := fmt.Sprintf("http://%s:%d/api/subnet/%s", m.serverAddr, m.httpPort, shorthand)
+		addr, subnet := makeIPv6Full(i, prefix, level)
+		serverUrl := fmt.Sprintf("http://%s:%d/api/subnet/%s/%d", m.serverAddr, m.httpPort, addr, subnet)
 
 		client := &http.Client{}
 		req, err := http.NewRequest("GET", serverUrl, nil)
@@ -249,16 +259,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "enter":
-			selection := m.unitTables[m.viewing].SelectedRow()[0]
-			selection = selection[:5*(m.viewing+1)] // Adjust for the level
-			m.selections[m.viewing] = selection
+			cursor := m.unitTables[m.viewing].Cursor()
+			selection := m.shadowTables[m.viewing].Rows()[cursor][0]
 			if m.viewing < t128 {
+				selection = selection[:5*(m.viewing+1)] // Adjust for the level
+				m.selections[m.viewing] = selection
 				m.viewing++
 				m.PopulateTable(m.selections[m.viewing-1], m.viewing)
 			} else {
 				// At the last level, send a claim
-				subnet := m.unitTables[m.viewing].SelectedRow()[0]
-				ip := strings.Split(subnet, "/")[0] // Get the IP part before the prefix
+				ip := strings.Split(selection, "/")[0] // Get the IP part before the prefix
 				if msg, err := m.SendClaim(ip); err == nil {
 					m.statusMessage = statusMessageStyle.Render(msg)
 					m.errorMessage = ""
