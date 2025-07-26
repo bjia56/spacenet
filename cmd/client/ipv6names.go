@@ -10,43 +10,120 @@ import (
 
 // Predefined word lists for name generation
 var (
-	adjectives = []string{
-		"Absolute", "Abundant", "Adamant", "Advancing", "Aegis", "Aeonic", "Ageless", "Ancient",
-		"Arcane", "Ascending", "Astral", "Azure", "Binding", "Blazing", "Boundless", "Bright",
-		"Brilliant", "Celestial", "Cerulean", "Chaotic", "Chromatic", "Colossal", "Cosmic",
-		"Crimson", "Crystal", "Dark", "Desolate", "Divine", "Dormant", "Drifting", "Dynamic",
-		"Ebony", "Echoing", "Emerald", "Endless", "Eternal", "Ethereal", "Everborn", "Fading",
-		"Fierce", "Flaring", "Flowing", "Frozen", "Fundamental", "Furious", "Fusion", "Gleaming",
-		"Glowing", "Golden", "Grand", "Gravity", "Hidden", "Howling", "Hyperion", "Imperial",
-		"Infinite", "Interstellar", "Iridescent", "Jovian", "Kinetic", "Lasting", "Limitless",
-		"Lunar", "Luminous", "Majestic", "Mysterious", "Mystic", "Nebulous", "Neural", "Noble",
-		"Northern", "Nova", "Obsidian", "Orbital", "Paramount", "Perpetual", "Phantom", "Plasma",
-		"Polar", "Prismatic", "Pulsing", "Quantum", "Quartz", "Radiant", "Raging", "Remote",
-		"Rising", "Royal", "Ruby", "Sacred", "Sapphire", "Savage", "Scarlet", "Shattered",
-		"Shining", "Silent", "Silver", "Singular", "Solar", "Sovereign", "Spatial", "Spectral",
-		"Stellar", "Storm", "Sublime", "Temporal", "Titan", "Twilight", "Ultimate", "Umbral",
-		"Unified", "Universal", "Untamed", "Vanguard", "Vast", "Veiled", "Velvet", "Venerable",
-		"Verdant", "Vibrant", "Violet", "Volatile", "Wandering", "Wayward", "Western", "Whispering",
-		"Windswept", "Xenial", "Yielding", "Zenith",
+	adjectives = map[int][]string{
+		// Level 16 - Universe-scale adjectives
+		16: {
+			"Absolute", "Boundless", "Colossal", "Cosmic", "Eternal", "Fundamental",
+			"Infinite", "Interstellar", "Limitless", "Paramount", "Primordial", "Universal",
+			"Ultimate", "Vast", "Celestial", "Omnipotent", "Singular", "Supreme",
+		},
+
+		// Level 32 - Supercluster adjectives
+		32: {
+			"Abundant", "Ascending", "Binding", "Dynamic", "Endless", "Fundamental",
+			"Grand", "Hyperion", "Imperial", "Majestic", "Sovereign", "Stellar",
+			"Sublime", "Unified", "Dominant", "Mammoth", "Massive",
+		},
+
+		// Level 48 - Galaxy Group adjectives
+		48: {
+			"Abundant", "Clustered", "Collective", "Connected", "Flowing", "Gathering",
+			"Harmonious", "Linked", "Networked", "Streaming", "Unified", "United",
+			"Woven", "Bound", "Converging", "Joined",
+		},
+
+		// Level 64 - Galaxy adjectives
+		64: {
+			"Astral", "Blazing", "Brilliant", "Luminous", "Nebulous", "Radiant",
+			"Shining", "Spiraling", "Stellar", "Swirling", "Whirling", "Rotating",
+			"Galactic", "Cosmic", "Starborn", "Celestial",
+		},
+
+		// Level 80 - Star Group adjectives
+		80: {
+			"Burning", "Flaring", "Gleaming", "Glowing", "Golden", "Illuminated",
+			"Lucent", "Pulsing", "Radiating", "Scintillating", "Twinkling", "Bright",
+			"Dazzling", "Effulgent", "Starlit",
+		},
+
+		// Level 96 - Solar System adjectives
+		96: {
+			"Balanced", "Circular", "Gravitational", "Harmonious", "Orbital", "Planetary",
+			"Revolving", "Solar", "Synchronous", "Systematic", "Aligned", "Cyclic",
+			"Ecliptic", "Ordered",
+		},
+
+		// Level 112 - Planet adjectives
+		112: {
+			"Azure", "Crystalline", "Emerald", "Frozen", "Gaseous", "Molten",
+			"Obsidian", "Rocky", "Sapphire", "Terrestrial", "Tropical", "Verdant",
+			"Violet", "Volcanic", "Windswept", "Crimson",
+		},
+
+		// Level 128 - Settlement adjectives
+		128: {
+			"Ancient", "Bustling", "Colonial", "Fortified", "Hidden", "Industrial",
+			"Metropolitan", "Noble", "Prosperous", "Rising", "Sacred", "Thriving",
+			"Urban", "Vibrant", "Wealthy", "Established",
+		},
 	}
 
-	nouns = []string{
-		"Aegis", "Altar", "Apex", "Archive", "Arsenal", "Artifact", "Ascent", "Atlas",
-		"Aurora", "Avalon", "Axiom", "Bastion", "Beacon", "Breach", "Bulwark", "Cascade",
-		"Catalyst", "Celestial", "Citadel", "Codex", "Colossus", "Core", "Corona", "Cosmos",
-		"Crown", "Crucible", "Crystal", "Cyclix", "Dawn", "Decree", "Dominion", "Drift",
-		"Echo", "Edge", "Elysium", "Ember", "Enigma", "Epoch", "Equinox", "Eternity",
-		"Exodus", "Expanse", "Eye", "Fissure", "Flame", "Flow", "Flux", "Forge",
-		"Formation", "Fortress", "Frontier", "Gate", "Gateway", "Genesis", "Grove", "Guard",
-		"Haven", "Heart", "Helix", "Horizon", "Hymn", "Infinity", "Iris", "Junction",
-		"Keep", "Keystone", "Labyrinth", "Legacy", "Lens", "Light", "Locus", "Mandate",
-		"Matrix", "Meridian", "Monolith", "Monument", "Nebula", "Nexus", "Nova", "Oasis",
-		"Odyssey", "Oracle", "Orbit", "Paragon", "Path", "Pillar", "Portal", "Prism",
-		"Prophecy", "Pulse", "Pyre", "Quasar", "Rampart", "Realm", "Relic", "Rift",
-		"Sanctum", "Sanctuary", "Sentinel", "Shard", "Sigil", "Singularity", "Solace", "Spire",
-		"Star", "Summit", "Synergy", "Terminus", "Throne", "Tower", "Trinity", "Unity",
-		"Vale", "Vault", "Vector", "Vertex", "Vigil", "Void", "Vortex", "Ward",
-		"Watch", "Web", "Wellspring", "Witness", "Wonder", "Yard", "Zenith", "Zone",
+	nouns = map[int][]string{
+		// Level 16 - Universe-scale nouns
+		16: {
+			"Axis", "Boundary", "Expanse", "Firmament", "Infinity", "Matrix",
+			"Membrane", "Nexus", "Singularity", "Terminus", "Vector", "Vertex",
+			"Void", "Web", "Fabric", "Lattice", "Framework",
+		},
+
+		// Level 32 - Supercluster nouns
+		32: {
+			"Amalgam", "Bastion", "Colossus", "Domain", "Empire", "Formation",
+			"Legion", "Mandate", "Realm", "Sphere", "Supremacy", "Unity",
+			"Dominion", "Coalition", "Assembly",
+		},
+
+		// Level 48 - Galaxy Group nouns
+		48: {
+			"Assembly", "Chain", "Confluence", "Fellowship", "Network", "Pattern",
+			"Sequence", "Stream", "Symphony", "Union", "Weave", "Collection",
+			"Gathering", "Association",
+		},
+
+		// Level 64 - Galaxy nouns
+		64: {
+			"Corona", "Cosmos", "Disk", "Eye", "Helix", "Nebula",
+			"Spiral", "Star", "Vortex", "Whirlpool", "Ring", "Cloud",
+			"Field", "Sea", "Cluster",
+		},
+
+		// Level 80 - Star Group nouns
+		80: {
+			"Beacon", "Constellation", "Crucible", "Ember", "Flame", "Forge",
+			"Light", "Pyre", "Spark", "Torch", "Aurora", "Flare",
+			"Stream", "Garden",
+		},
+
+		// Level 96 - Solar System nouns
+		96: {
+			"Circuit", "Cycle", "Horizon", "Orbit", "Path", "Procession",
+			"Ring", "Sanctuary", "Sphere", "System", "Dance", "Family",
+			"Haven", "Domain",
+		},
+
+		// Level 112 - Planet nouns
+		112: {
+			"Globe", "Haven", "Heart", "Keep", "Oasis", "Paradise",
+			"Sanctuary", "Sphere", "Stronghold", "Vale", "World", "Garden",
+			"Realm", "Crown", "Jewel",
+		},
+
+		// Level 128 - Settlement nouns
+		128: {
+			"Arcology", "Citadel", "Enclave", "Fortress", "Haven", "Nexus",
+			"Outpost", "Sanctuary", "Spire", "Stronghold", "Tower", "Ward",
+			"Capital", "Port", "Station", "Hub",
+		},
 	}
 
 	celestialTypes = map[int][]string{
@@ -99,7 +176,6 @@ var (
 		128: {
 			"Metropolis", "City", "Megacity", "Habitat",
 			"Colony", "Settlement", "Outpost", "Station",
-			"Haven", "Stronghold", "Citadel", "Nexus",
 			"Enclave", "Base", "Community", "Urban Center",
 			"Village", "Town", "Borough", "District",
 		},
@@ -126,16 +202,16 @@ func GenerateName(saddr string, subnetSize int) (string, error) {
 	hash := sha256.Sum256(append(truncatedAddr, subnetSizeBytes...))
 
 	// Use different parts of the hash for different components of the name
-	adjIndex := int(binary.BigEndian.Uint32(hash[0:4])) % len(adjectives)
-	nounIndex := int(binary.BigEndian.Uint32(hash[4:8])) % len(nouns)
+	adjIndex := int(binary.BigEndian.Uint32(hash[0:4])) % len(adjectives[subnetSize])
+	nounIndex := int(binary.BigEndian.Uint32(hash[4:8])) % len(nouns[subnetSize])
 	celestialIndex := int(binary.BigEndian.Uint32(hash[8:12])) % len(celestialTypes[subnetSize])
 
 	// Generate a numeric suffix using another part of the hash
 	suffix := binary.BigEndian.Uint16(hash[12:14]) % 1000
 
 	return fmt.Sprintf("%s %s %s-%d",
-		adjectives[adjIndex],
-		nouns[nounIndex],
+		adjectives[subnetSize][adjIndex],
+		nouns[subnetSize][nounIndex],
 		celestialTypes[subnetSize][celestialIndex],
 		suffix,
 	), nil
