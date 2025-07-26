@@ -4,7 +4,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/bjia56/spacenet/api"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -140,12 +139,12 @@ func (cs *ClaimStore) GetClaim(ipAddr string) (string, bool) {
 }
 
 // GetSubnetStats retrieves statistics for a specific subnet
-func (cs *ClaimStore) GetSubnetStats(subnet string) (*api.SubnetStats, bool) {
+func (cs *ClaimStore) GetSubnetStats(subnet string) (*SubnetStats, bool) {
 	return cs.ipTree.GetSubnetStats(subnet)
 }
 
 // GetAllSubnets retrieves statistics for all tracked subnets with the given prefix length
-func (cs *ClaimStore) GetAllSubnets(prefixLen int) []api.SubnetStats {
+func (cs *ClaimStore) GetAllSubnets(prefixLen int) []SubnetStats {
 	return cs.ipTree.GetAllSubnets(prefixLen)
 }
 

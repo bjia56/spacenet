@@ -4,8 +4,6 @@ import (
 	"math/big"
 	"net"
 	"sync"
-
-	"github.com/bjia56/spacenet/api"
 )
 
 // IPTree represents a hierarchical structure for managing IPv6 address claims
@@ -163,6 +161,11 @@ func (t *IPTree) recalculateDominant(node *IPNode) {
 		if count.Cmp(maxCount) > 0 {
 			maxCount = count
 			dominantClaimant = claimant
+		} else if count.Cmp(maxCount) == 0 {
+			// If there's a tie, prefer the lexicographically smaller claimant
+			if dominantClaimant == "" || claimant < dominantClaimant {
+				dominantClaimant = claimant
+			}
 		}
 	}
 
@@ -236,7 +239,7 @@ func (t *IPTree) removeFromSubnet(ip net.IP, prefixLen int, claimant string) {
 }
 
 // GetSubnetStats gets statistics for a subnet
-func (t *IPTree) GetSubnetStats(subnetStr string) (*api.SubnetStats, bool) {
+func (t *IPTree) GetSubnetStats(subnetStr string) (*SubnetStats, bool) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -288,38 +291,31 @@ func (t *IPTree) GetSubnetStats(subnetStr string) (*api.SubnetStats, bool) {
 	child, exists := node.children[subnetStr]
 	if !exists {
 		// No data for this subnet
-		return &api.SubnetStats{
-			Subnet:             subnetStr,
-			TotalAddresses:     new(big.Int).Exp(big.NewInt(2), big.NewInt(128-int64(prefixLen)), nil).String(),
-			ClaimedAddresses:   "0",
-			DominantClaimant:   "",
-			DominantPercentage: 0,
-			AllClaimants:       make(map[string]float64),
+		return &SubnetStats{
+			Subnet:     subnetStr,
+			Owner:      "",
+			Percentage: 0,
 		}, true
 	}
 
-	// Calculate percentages for all claimants
-	allClaimants := make(map[string]float64)
-	totalClaimedFloat := new(big.Float).SetInt(child.claimedCount)
-
-	for claimant, count := range child.claimants {
-		countFloat := new(big.Float).SetInt(count)
-		percentage, _ := new(big.Float).Quo(countFloat, totalClaimedFloat).Float64()
-		allClaimants[claimant] = percentage * 100.0
+	if child.dominantPercentage <= 50.0 {
+		// If no dominant claimant, return empty stats
+		return &SubnetStats{
+			Subnet:     subnetStr,
+			Owner:      "",
+			Percentage: 0,
+		}, true
 	}
 
-	return &api.SubnetStats{
-		Subnet:             subnetStr,
-		TotalAddresses:     child.totalAddresses.String(),
-		ClaimedAddresses:   child.claimedCount.String(),
-		DominantClaimant:   child.dominantClaimant,
-		DominantPercentage: child.dominantPercentage,
-		AllClaimants:       allClaimants,
+	return &SubnetStats{
+		Subnet:     subnetStr,
+		Owner:      child.dominantClaimant,
+		Percentage: child.dominantPercentage,
 	}, true
 }
 
 // GetAllSubnets gets statistics for all tracked subnets with the given prefix length
-func (t *IPTree) GetAllSubnets(prefixLen int) []api.SubnetStats {
+func (t *IPTree) GetAllSubnets(prefixLen int) []SubnetStats {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -334,35 +330,19 @@ func (t *IPTree) GetAllSubnets(prefixLen int) []api.SubnetStats {
 	}
 
 	if !validPrefix {
-		return []api.SubnetStats{}
+		return []SubnetStats{}
 	}
 
-	results := []api.SubnetStats{}
+	results := []SubnetStats{}
 
 	// Find all subnets with this prefix
 	for subnetStr, node := range t.root.children {
 		if node.prefixLen == prefixLen {
-			// Calculate percentages for all claimants
-			allClaimants := make(map[string]float64)
-			if node.claimedCount.Cmp(big.NewInt(0)) > 0 {
-				totalClaimedFloat := new(big.Float).SetInt(node.claimedCount)
-
-				for claimant, count := range node.claimants {
-					countFloat := new(big.Float).SetInt(count)
-					percentage, _ := new(big.Float).Quo(countFloat, totalClaimedFloat).Float64()
-					allClaimants[claimant] = percentage * 100.0
-				}
+			stats := SubnetStats{
+				Subnet:     subnetStr,
+				Owner:      node.dominantClaimant,
+				Percentage: node.dominantPercentage,
 			}
-
-			stats := api.SubnetStats{
-				Subnet:             subnetStr,
-				TotalAddresses:     node.totalAddresses.String(),
-				ClaimedAddresses:   node.claimedCount.String(),
-				DominantClaimant:   node.dominantClaimant,
-				DominantPercentage: node.dominantPercentage,
-				AllClaimants:       allClaimants,
-			}
-
 			results = append(results, stats)
 		}
 	}

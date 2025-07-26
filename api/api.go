@@ -9,20 +9,7 @@ type ClaimResponse struct {
 
 // SubnetResponse represents the JSON response for subnet statistics
 type SubnetResponse struct {
-	Subnet             string             `json:"subnet"`
-	TotalAddresses     string             `json:"totalAddresses"`
-	ClaimedAddresses   string             `json:"claimedAddresses"`
-	DominantClaimant   string             `json:"dominantClaimant"`
-	DominantPercentage float64            `json:"dominantPercentage"`
-	AllClaimants       map[string]float64 `json:"allClaimants"`
-}
-
-// SubnetStats represents statistics about a subnet
-type SubnetStats struct {
-	Subnet             string             `json:"subnet"`
-	TotalAddresses     string             `json:"totalAddresses"`
-	ClaimedAddresses   string             `json:"claimedAddresses"`
-	DominantClaimant   string             `json:"dominantClaimant"`
-	DominantPercentage float64            `json:"dominantPercentage"`
-	AllClaimants       map[string]float64 `json:"allClaimants"` // Map of claimant to percentage
+	Subnet     string  `json:"subnet"`
+	Owner      string  `json:"owner"`
+	Percentage float64 `json:"percentage"`
 }

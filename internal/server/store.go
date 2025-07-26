@@ -1,8 +1,9 @@
 package server
 
-import (
-	"github.com/bjia56/spacenet/api"
-)
+import "github.com/bjia56/spacenet/api"
+
+// SubnetStats represents statistics about a subnet
+type SubnetStats = api.SubnetResponse
 
 // Store defines the interface for claim storage backends
 type Store interface {
@@ -16,10 +17,10 @@ type Store interface {
 	GetAllClaims() map[string]string
 
 	// GetSubnetStats retrieves statistics for a specific subnet
-	GetSubnetStats(subnet string) (*api.SubnetStats, bool)
+	GetSubnetStats(subnet string) (*SubnetStats, bool)
 
 	// GetAllSubnets retrieves statistics for all tracked subnets with the given prefix length
-	GetAllSubnets(prefixLen int) []api.SubnetStats
+	GetAllSubnets(prefixLen int) []SubnetStats
 
 	// Close releases any resources held by the store
 	Close() error

@@ -92,14 +92,7 @@ func (h *HTTPHandler) handleGetStatsBySubnet(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Convert to response format
-	response := api.SubnetResponse{
-		Subnet:             stats.Subnet,
-		TotalAddresses:     stats.TotalAddresses,
-		ClaimedAddresses:   stats.ClaimedAddresses,
-		DominantClaimant:   stats.DominantClaimant,
-		DominantPercentage: stats.DominantPercentage,
-		AllClaimants:       stats.AllClaimants,
-	}
+	var response *api.SubnetResponse = stats
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
