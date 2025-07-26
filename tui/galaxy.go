@@ -32,15 +32,15 @@ func (g *Galaxy) Initialize() {
 	g.pointsPerArm = 60
 	g.armSpread = 0.5
 	g.spinSpeed = 0.12
-	g.galaxyRadius = 9.0
+	g.galaxyRadius = 15.0
 	g.width = 80
 	g.height = 24
 
 	// Initialize lipgloss styles for spiral colors
-	g.dotStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("33"))   // Blue
-	g.starStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("36"))  // Cyan
-	g.orbStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("226"))  // Yellow
-	g.coreStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")) // Red
+	g.dotStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("33"))              // Blue
+	g.starStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("36"))             // Cyan
+	g.orbStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("226"))             // Yellow
+	g.coreStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true) // Red
 }
 
 func (g *Galaxy) SetDimensions(width, height int) {
@@ -99,13 +99,13 @@ func (g *Galaxy) View() string {
 				// Vary brightness for spiral effect and add color using lipgloss
 				var ch string
 				if p < g.pointsPerArm/4 {
-					ch = g.dotStyle.Render(".")
+					ch = g.coreStyle.Render(".")
 				} else if p < g.pointsPerArm/2 {
 					ch = g.starStyle.Render("*")
 				} else if p < 3*g.pointsPerArm/4 {
-					ch = g.orbStyle.Render("o")
+					ch = g.orbStyle.Render("*")
 				} else {
-					ch = g.coreStyle.Render("@")
+					ch = g.dotStyle.Render(".")
 				}
 				screen[y][x] = ch
 			}
