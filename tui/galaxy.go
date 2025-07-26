@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/timer"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type Galaxy struct {
@@ -19,6 +20,11 @@ type Galaxy struct {
 
 	width  int
 	height int
+
+	dotStyle  lipgloss.Style
+	starStyle lipgloss.Style
+	orbStyle  lipgloss.Style
+	coreStyle lipgloss.Style
 }
 
 func (g *Galaxy) Initialize() {
@@ -29,6 +35,12 @@ func (g *Galaxy) Initialize() {
 	g.galaxyRadius = 9.0
 	g.width = 80
 	g.height = 24
+
+	// Initialize lipgloss styles for spiral colors
+	g.dotStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("33"))   // Blue
+	g.starStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("36"))  // Cyan
+	g.orbStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("226"))  // Yellow
+	g.coreStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")) // Red
 }
 
 func (g *Galaxy) SetDimensions(width, height int) {
@@ -62,12 +74,12 @@ func (g *Galaxy) Tick() {
 }
 
 func (g *Galaxy) View() string {
-	// Create empty screen
-	screen := make([][]rune, g.height)
+	// Create empty screen (now [][]string for styled output)
+	screen := make([][]string, g.height)
 	for i := range screen {
-		screen[i] = make([]rune, g.width)
+		screen[i] = make([]string, g.width)
 		for j := range screen[i] {
-			screen[i][j] = ' '
+			screen[i][j] = " "
 		}
 	}
 
@@ -84,16 +96,16 @@ func (g *Galaxy) View() string {
 			y := int(float64(cy) + r*math.Sin(theta)*0.5) // squash for ellipse
 
 			if x >= 0 && x < g.width && y >= 0 && y < g.height {
-				// Vary brightness for spiral effect
-				var ch rune
+				// Vary brightness for spiral effect and add color using lipgloss
+				var ch string
 				if p < g.pointsPerArm/4 {
-					ch = '.'
+					ch = g.dotStyle.Render(".")
 				} else if p < g.pointsPerArm/2 {
-					ch = '*'
+					ch = g.starStyle.Render("*")
 				} else if p < 3*g.pointsPerArm/4 {
-					ch = 'o'
+					ch = g.orbStyle.Render("o")
 				} else {
-					ch = '@'
+					ch = g.coreStyle.Render("@")
 				}
 				screen[y][x] = ch
 			}
@@ -102,7 +114,10 @@ func (g *Galaxy) View() string {
 
 	var output string
 	for _, row := range screen {
-		output += string(row) + "\n"
+		for _, ch := range row {
+			output += ch
+		}
+		output += "\n"
 	}
 	return output
 }
