@@ -3,6 +3,7 @@ package server
 import (
 	"math/big"
 	"net"
+	"slices"
 	"sync"
 )
 
@@ -123,15 +124,15 @@ func (t *IPTree) findOrCreateNode(subnet *net.IPNet, prefixLen int) *IPNode {
 	// Start at the root
 	node := t.root
 
-	// Calculate total addresses in this subnet
-	totalAddrs := new(big.Int).Exp(big.NewInt(2), big.NewInt(128-int64(prefixLen)), nil)
-
 	subnetStr := subnet.String()
 
 	// Check if we already have a node for this subnet
 	if child, exists := node.children[subnetStr]; exists {
 		return child
 	}
+
+	// Calculate total addresses in this subnet
+	totalAddrs := new(big.Int).Exp(big.NewInt(2), big.NewInt(128-int64(prefixLen)), nil)
 
 	// Create a new node
 	newNode := &IPNode{
@@ -174,7 +175,7 @@ func (t *IPTree) recalculateDominant(node *IPNode) {
 	if node.claimedCount.Cmp(big.NewInt(0)) > 0 {
 		// Convert to float for percentage calculation
 		countFloat := new(big.Float).SetInt(maxCount)
-		totalFloat := new(big.Float).SetInt(node.claimedCount)
+		totalFloat := new(big.Float).SetInt(node.totalAddresses)
 
 		ratio, _ := new(big.Float).Quo(countFloat, totalFloat).Float64()
 		percentage = ratio * 100.0
@@ -322,11 +323,8 @@ func (t *IPTree) GetAllSubnets(prefixLen int) []SubnetStats {
 	// Validate prefix length
 	validPrefix := false
 	stdPrefixes := []int{16, 32, 48, 64, 80, 96, 112, 128}
-	for _, p := range stdPrefixes {
-		if p == prefixLen {
-			validPrefix = true
-			break
-		}
+	if slices.Contains(stdPrefixes, prefixLen) {
+		validPrefix = true
 	}
 
 	if !validPrefix {
