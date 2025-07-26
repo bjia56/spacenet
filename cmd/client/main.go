@@ -43,15 +43,18 @@ const (
 
 type UnitTables [8]table.Model
 
-func (ut *UnitTables) Focus() {
-	for i := range ut {
-		ut[i].Focus()
+func (ut *UnitTables) Initialize() {
+	columns := []table.Column{
+		{Title: "Subnet", Width: 50},
+		{Title: "Owner", Width: 30},
 	}
-}
-
-func (ut *UnitTables) Blur() {
 	for i := range ut {
-		ut[i].Blur()
+		ut[i] = table.New(
+			table.WithColumns(columns),
+			table.WithRows([]table.Row{}),
+			table.WithFocused(true),
+			table.WithHeight(10),
+		)
 	}
 }
 
@@ -96,12 +99,9 @@ type Model struct {
 	udpPort    int
 	name       string
 
-	nameInput     textinput.Model
-	inputSelected bool
-	unitTables    UnitTables
-	tableSelected bool
-	selections    [8]string // Selected subnets for each table level
-	viewing       level
+	unitTables UnitTables
+	selections [8]string // Selected subnets for each table level
+	viewing    level
 
 	statusMessage string
 	errorMessage  string
@@ -122,96 +122,30 @@ func makeIPv6Full(i int, prefix string, level level) string {
 }
 
 // Initialize returns an initial model
-func Initialize(serverAddr string, httpPort, udpPort int) *Model {
-	columns := []table.Column{
-		{Title: "Subnet", Width: 50},
-		{Title: "Owner", Width: 30},
-	}
-
-	ti := textinput.New()
-	ti.Prompt = "Claim for: "
-	ti.SetValue("Anonymous")
-	ti.Focus()
-	ti.CharLimit = 32
-	ti.Width = 33
-
+func Initialize(serverAddr string, httpPort, udpPort int, name string) *Model {
 	m := &Model{
-		serverAddr:    serverAddr,
-		httpPort:      httpPort,
-		udpPort:       udpPort,
-		name:          "Anonymous",
-		nameInput:     ti,
-		inputSelected: true,
-		unitTables: UnitTables{
-			t16: table.New(
-				table.WithColumns(columns),
-				table.WithRows([]table.Row{}),
-				table.WithFocused(false),
-				table.WithHeight(10),
-			),
-			t32: table.New(
-				table.WithColumns(columns),
-				table.WithRows([]table.Row{}),
-				table.WithFocused(false),
-				table.WithHeight(10),
-			),
-			t48: table.New(
-				table.WithColumns(columns),
-				table.WithRows([]table.Row{}),
-				table.WithFocused(false),
-				table.WithHeight(10),
-			),
-			t64: table.New(
-				table.WithColumns(columns),
-				table.WithRows([]table.Row{}),
-				table.WithFocused(false),
-				table.WithHeight(10),
-			),
-			t80: table.New(
-				table.WithColumns(columns),
-				table.WithRows([]table.Row{}),
-				table.WithFocused(false),
-				table.WithHeight(10),
-			),
-			t96: table.New(
-				table.WithColumns(columns),
-				table.WithRows([]table.Row{}),
-				table.WithFocused(false),
-				table.WithHeight(10),
-			),
-			t112: table.New(
-				table.WithColumns(columns),
-				table.WithRows([]table.Row{}),
-				table.WithFocused(false),
-				table.WithHeight(10),
-			),
-			t128: table.New(
-				table.WithColumns(columns),
-				table.WithRows([]table.Row{}),
-				table.WithFocused(false),
-				table.WithHeight(10),
-			),
-		},
-		tableSelected: false,
+		serverAddr: serverAddr,
+		httpPort:   httpPort,
+		udpPort:    udpPort,
+		name:       name,
 	}
+	m.unitTables.Initialize()
 	m.PopulateTable("", t16)
 	return m
 }
 
 // SendClaim sends a claim for an IP
-func (m *Model) SendClaim(ip string) tea.Cmd {
-	return func() tea.Msg {
-		// Build sendip args
-		args := []string{"-d", m.name, "-p", "ipv6", "-6s", ip, "-p", "udp", "-ud", fmt.Sprintf("%d", m.udpPort), m.serverAddr}
+func (m *Model) SendClaim(ip string) (string, error) {
+	// Build sendip args
+	args := []string{"-d", m.name, "-p", "ipv6", "-6s", ip, "-p", "udp", "-ud", fmt.Sprintf("%d", m.udpPort), m.serverAddr}
 
-		// Execute sendip command
-		rc, _ := gosendip.SendIP(args)
-		if rc != 0 {
-			return fmt.Errorf("failed to send claim for %s: exit code %d", ip, rc)
-		}
-
-		return "Claim sent successfully!"
+	// Execute sendip command
+	rc, _ := gosendip.SendIP(args)
+	if rc != 0 {
+		return "", fmt.Errorf("failed to send claim for %s: exit code %d", ip, rc)
 	}
+
+	return "Claim sent successfully!", nil
 }
 
 // PopulateTable populates a table with 2^16 rows
@@ -285,93 +219,49 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		reserved := 10
+		reserved := 6
 		m.unitTables.SetHeight(msg.Height - reserved)
 		m.unitTables.SetWidth(msg.Width - 2)
 
 	case tea.KeyMsg:
+		m.statusMessage = ""
+		m.errorMessage = ""
+
 		switch msg.String() {
-		case "ctrl+c":
+		case "ctrl+c", "q":
 			return m, tea.Quit
 
-		case "q":
-			if m.tableSelected {
-				return m, tea.Quit
-			} else {
-				break
-			}
-
 		case "esc":
-			if !m.tableSelected {
-				break
-			}
-
 			if m.viewing > 0 {
 				m.viewing--
 			}
 
 		case "enter":
-			if !m.tableSelected {
-				m.tableSelected = true
-				m.inputSelected = false
-				m.nameInput.Blur()
-				m.unitTables.Focus()
+			selection := m.unitTables[m.viewing].SelectedRow()[0]
+			selection = selection[:5*(m.viewing+1)] // Adjust for the level
+			m.selections[m.viewing] = selection
+			if m.viewing < t128 {
+				m.viewing++
+				m.PopulateTable(m.selections[m.viewing-1], m.viewing)
 			} else {
-				selection := m.unitTables[m.viewing].SelectedRow()[0]
-				selection = selection[:5*(m.viewing+1)] // Adjust for the level
-				m.selections[m.viewing] = selection
-				if m.viewing < t128 {
-					m.viewing++
-					m.PopulateTable(m.selections[m.viewing-1], m.viewing)
-					m.FetchClaims(m.selections[m.viewing-1], m.viewing, 0, 20)
+				// At the last level, send a claim
+				subnet := m.unitTables[m.viewing].SelectedRow()[0]
+				ip := strings.Split(subnet, "/")[0] // Get the IP part before the prefix
+				if msg, err := m.SendClaim(ip); err == nil {
+					m.statusMessage = statusMessageStyle.Render(msg)
+					m.errorMessage = ""
 				} else {
-					// Send claim for the selected IP
-					// TODO: Implement claim sending logic
+					m.errorMessage = errorMessageStyle.Render("Failed to send claim")
+					m.statusMessage = ""
 				}
 			}
-
-		case "tab":
-			if m.inputSelected {
-				m.inputSelected = false
-				m.tableSelected = true
-				m.nameInput.Blur()
-				m.unitTables.Focus()
-			} else {
-				m.inputSelected = true
-				m.tableSelected = false
-				m.nameInput.Focus()
-				m.unitTables.Blur()
-			}
 		}
-
-	case string:
-		if msg == "Claim sent successfully!" {
-			m.statusMessage = statusMessageStyle.Render(msg)
-			m.errorMessage = ""
-		}
-
-	case error:
-		m.errorMessage = errorMessageStyle.Render(msg.Error())
-		m.statusMessage = ""
 	}
 
 	// Update the selected row in the current table
-	if m.tableSelected {
-		t, cmd := m.unitTables[m.viewing].Update(msg)
-		m.unitTables[m.viewing] = t
-		cmds = append(cmds, cmd)
-	} else if m.inputSelected {
-		t, cmd := m.nameInput.Update(msg)
-		m.nameInput = t
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		if m.nameInput.Value() != "" {
-			m.name = m.nameInput.Value()
-		} else {
-			m.name = "Anonymous"
-		}
-	}
+	t, cmd := m.unitTables[m.viewing].Update(msg)
+	m.unitTables[m.viewing] = t
+	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
 }
@@ -387,8 +277,7 @@ func (m *Model) View() string {
 	}
 
 	return titleStyle.Render("SpaceNet Browser") + "\n\n" +
-		m.nameInput.View() + "\n\n" +
-		tableStyle.Render(m.unitTables[m.viewing].View()) + "\n\n" +
+		tableStyle.Render(m.unitTables[m.viewing].View()) + "\n" +
 		msg + "\n" +
 		helpStyle("enter: select subnet, esc: back, q: quit")
 }
@@ -398,6 +287,7 @@ func main() {
 	server := flag.String("server", "::1", "IPv6 address of the server")
 	httpPort := flag.Int("http-port", 8080, "HTTP port for the server's API")
 	udpPort := flag.Int("port", 1337, "UDP port number of the server")
+	name := flag.String("name", "Anonymous", "Name to use for claims")
 	flag.Parse()
 
 	// Set up logging
@@ -409,7 +299,7 @@ func main() {
 	defer f.Close()
 
 	// Initialize the TUI
-	p := tea.NewProgram(Initialize(*server, *httpPort, *udpPort), tea.WithAltScreen())
+	p := tea.NewProgram(Initialize(*server, *httpPort, *udpPort, *name), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		log.Fatalf("Error running program: %v", err)
 	}
