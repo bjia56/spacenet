@@ -111,7 +111,8 @@ type Model struct {
 	viewing       level
 	refreshClaims bool // Whether to refresh claims on the next update
 
-	galaxy *Galaxy // Galaxy model for visual representation
+	galaxy *Galaxy    // Galaxy model for visual representation
+	wall   *GreatWall // Great Wall model for visual representation
 
 	statusMessage string
 	errorMessage  string
@@ -140,11 +141,13 @@ func Initialize(serverAddr string, httpPort, udpPort int, name string) *Model {
 		name:          name,
 		refreshClaims: true,
 		galaxy:        &Galaxy{},
+		wall:          &GreatWall{},
 	}
 	m.unitTables.Initialize()
 	m.shadowTables.Initialize()
 	m.PopulateTable("", t16)
 	m.galaxy.Initialize()
+	m.wall.Initialize()
 	return m
 }
 
@@ -239,6 +242,7 @@ func (m *Model) GetParentSelection(level level) string {
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.galaxy.Init(),
+		m.wall.Init(),
 	)
 }
 
@@ -252,6 +256,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.unitTables.SetHeight(msg.Height - reserved)
 		m.unitTables.SetWidth((msg.Width / 2) - 2)
 		m.galaxy.SetDimensions(m.unitTables[0].Width(), m.unitTables[0].Height())
+		m.wall.SetDimensions(m.unitTables[0].Width(), m.unitTables[0].Height())
 
 	case tea.KeyMsg:
 		m.statusMessage = ""
@@ -306,6 +311,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	m.galaxy = g.(*Galaxy)
 
+	// Update the wall model
+	w, cmd := m.wall.Update(msg)
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	m.wall = w.(*GreatWall)
+
 	return m, tea.Batch(cmds...)
 }
 
@@ -326,7 +338,7 @@ func (m *Model) View() string {
 		lipgloss.JoinHorizontal(
 			lipgloss.Bottom,
 			tableStyle.Render(m.unitTables[m.viewing].View()),
-			tableStyle.Render(m.galaxy.View()),
+			tableStyle.Render(m.wall.View()),
 		) + "\n" + msg + "\n" +
 		helpStyle("enter: select subnet, esc: back, q: quit")
 }

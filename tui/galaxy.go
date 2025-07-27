@@ -61,10 +61,12 @@ func (g *Galaxy) Init() tea.Cmd {
 }
 
 func (g *Galaxy) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg.(type) {
+	switch m := msg.(type) {
 	case timer.TickMsg:
-		g.Tick()
-		return g, g.Init()
+		if m.ID == int(uintptr(unsafe.Pointer(g))) {
+			g.Tick()
+			return g, g.Init()
+		}
 	}
 	return g, nil
 }
