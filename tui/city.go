@@ -141,12 +141,12 @@ func (c *City) generateCityLayout() {
 	c.buildings = make([]Building, c.numBuildings)
 	for i := range c.buildings {
 		c.buildings[i] = Building{
-			x:         int(rand(i*3) * float64(c.width)),
-			width:     3 + int(rand(i*7)*4),
-			height:    5 + int(rand(i*11)*float64(c.height)/2),
-			style:     int(rand(i*13) * 3),
-			lit:       rand(i * 17),
-			hasBeacon: rand(i*19) > 0.7,
+			x:         int(cityRand(i*3) * float64(c.width)),
+			width:     3 + int(cityRand(i*7)*4),
+			height:    5 + int(cityRand(i*11)*float64(c.height)/2),
+			style:     int(cityRand(i*13) * 3),
+			lit:       cityRand(i * 17),
+			hasBeacon: cityRand(i*19) > 0.7,
 		}
 		c.buildings[i].y = c.height - c.buildings[i].height
 	}
@@ -161,7 +161,7 @@ func (c *City) generateCityLayout() {
 			startY:  y,
 			endX:    c.width,
 			endY:    y,
-			traffic: 0.5 + rand(i*23)*0.5,
+			traffic: 0.5 + cityRand(i*23)*0.5,
 		}
 	}
 }
@@ -170,7 +170,7 @@ func (c *City) drawBackground(screen [][]string) {
 	// Draw sky with weather effects
 	for y := 0; y < c.height; y++ {
 		for x := 0; x < c.width; x++ {
-			if rand(x*y) > 0.9 {
+			if cityRand(x*y) > 0.9 {
 				if c.weatherEffect > 0.5 { // Rain
 					screen[y][x] = c.backgroundStyle.Render("|")
 				} else if c.weatherEffect < -0.5 { // Snow
@@ -202,7 +202,7 @@ func (c *City) drawBuildings(screen [][]string) {
 				if x >= 0 && y >= 0 && x < c.width && y < c.height {
 					// Draw windows
 					if (x-building.x)%(building.style+2) == 1 && (y-building.y)%3 == 1 {
-						if rand(int(c.offset)*x*y) < building.lit {
+						if cityRand(int(c.offset)*x*y) < building.lit {
 							screen[y][x] = c.highlightStyle.Render("■")
 						} else {
 							screen[y][x] = c.windowStyle.Render("□")

@@ -106,7 +106,7 @@ func (w *GreatWall) View() string {
 
 				// Dynamic branch generation
 				branchProb := 0.15 + math.Sin(progress*math.Pi*2+w.offset)*0.05
-				if rand(int(x*1000)) < branchProb {
+				if starRand(int(x*1000)) < branchProb {
 					// Calculate branch length based on position and flow
 					flowStrength := math.Abs(wave) + math.Abs(math.Sin(w.offset+phase))
 					branchLen := 3.0 + math.Sin(phase*2+w.offset)*2.0 - flowStrength

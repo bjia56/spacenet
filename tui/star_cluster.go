@@ -111,7 +111,7 @@ func (s *StarCluster) View() string {
 	// Draw the stars
 	for i := 0; i < s.numStars; i++ {
 		// Calculate star position with some clustering towards center
-		r := math.Pow(rand(i), 0.5) * s.clusterRadius * float64(s.height)
+		r := math.Pow(starRand(i), 0.5) * s.clusterRadius * float64(s.height)
 		angle := float64(i)*math.Phi*2 + s.offset*math.Sin(float64(i))
 
 		x := int(float64(cx) + math.Cos(angle)*r*2)
@@ -162,7 +162,7 @@ func (s *StarCluster) View() string {
 }
 
 // Simple deterministic random number generator for consistent star positions
-func rand(seed int) float64 {
+func starRand(seed int) float64 {
 	x := float64(seed * 12345)
 	return (math.Sin(x) + 1.0) * 0.5
 }

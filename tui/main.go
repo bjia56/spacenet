@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -326,9 +327,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	t, cmd := m.unitTables[m.viewing].Update(msg)
 	m.unitTables[m.viewing] = t
 	cmds = append(cmds, cmd)
-	if lastCursor != m.unitTables[m.viewing].Cursor() {
+	newCursor := m.unitTables[m.viewing].Cursor()
+	if lastCursor != newCursor {
 		m.refreshClaims = true // Refresh claims if cursor changed
 	}
+
+	ip := strings.Split(m.shadowTables[m.viewing].Rows()[newCursor][0], "/")[0]
+	ipv6 := net.ParseIP(ip)
+	m.animationModels[m.viewing].AnimateForIP(ipv6)
 
 	// Update the animation model
 	if cmd := m.animationModels.Update(msg, m.viewing); cmd != nil {
