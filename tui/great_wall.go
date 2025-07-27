@@ -24,11 +24,11 @@ type GreatWall struct {
 
 func NewGreatWall() *GreatWall {
 	w := &GreatWall{
-		numFilaments:  3,
-		pointsPerFil:  80,
-		wallCurvature: 0.3,
+		numFilaments:  5,   // Increased number of filaments
+		pointsPerFil:  100, // More points for denser appearance
+		wallCurvature: 0.4, // Increased curve for more vertical spread
 		flowSpeed:     0.05,
-		wallLength:    20,
+		wallLength:    30, // Increased length for wider spread
 		offset:        0.0,
 
 		// Initialize lipgloss styles for the great wall
@@ -58,31 +58,44 @@ func (w *GreatWall) View() string {
 
 	// Draw multiple filaments that form the wall
 	for fil := 0; fil < w.numFilaments; fil++ {
-		filOffset := float64(fil) * 2.0 / float64(w.numFilaments)
+		// Calculate filament offset with improved distribution
+		filOffset := (float64(fil) - float64(w.numFilaments)/2) * 2.5 / float64(w.numFilaments)
 		for p := 0; p < w.pointsPerFil; p++ {
-			// Calculate position along the curved wall
+			// Calculate position along the curved wall with spread adjustment
 			progress := float64(p) / float64(w.pointsPerFil)
-			x := progress * w.wallLength
+			spreadFactor := 1.0 + math.Sin(progress*math.Pi)*0.2 // Wider in the middle
+			x := progress * w.wallLength * spreadFactor
 
-			// Add flowing wave effect with rotation
-			phase := x * (0.2 + 0.05*float64(fil)) // This creates the rotation effect
-			wave := math.Sin(x*0.5 + w.offset + phase)
+			// Complex wave effect combining multiple frequencies
+			phase := x*(0.2+0.05*float64(fil)) + math.Sin(w.offset*0.3)*0.2
+
+			// Primary wave combines three frequencies for organic movement
+			wave := math.Sin(x*0.5+w.offset+phase)*0.6 +
+				math.Sin(x*0.25+w.offset*1.5)*0.3 +
+				math.Sin(x*0.75+w.offset*0.7)*0.1
+
+			// Add distance-based damping for more natural flow
+			damping := 1.0 - math.Pow(math.Abs(progress-0.5)*2, 2)*0.3
+			wave *= damping
 
 			// Create curved structure with varying height
 			y := wave * w.wallCurvature * float64(w.height/4)
 
-			// Add vertical offset for multiple filaments with slight wave variation
-			y += filOffset*float64(w.height/6) + math.Sin(phase)*float64(w.height/12)
+			// Dynamic vertical offset with time-varying component
+			timeShift := math.Sin(w.offset*0.2+float64(fil)) * 0.3
+			y += filOffset*float64(w.height/6)*(1.0+timeShift) +
+				math.Sin(phase+w.offset*0.4)*float64(w.height/12)
 
-			// Scale and position in screen space
-			screenX := int(float64(cx) + (x-w.wallLength/2)*1.5)
-			screenY := int(float64(cy) + y)
+			// Scale and position in screen space with improved screen utilization
+			screenX := int(float64(cx) + (x-w.wallLength/2)*float64(w.width)/20) // Scale based on screen width
+			screenY := int(float64(cy) + y*float64(w.height)/12)                 // Scale based on screen height
 
 			// Draw main filament point
 			if screenX >= 0 && screenX < w.width && screenY >= 0 && screenY < w.height {
-				// Vary the appearance based on position
+				// Vary the appearance based on position and screen location
 				var ch string
-				if p%7 == 0 {
+				distFromCenter := math.Sqrt(math.Pow(float64(screenX-cx), 2) + math.Pow(float64(screenY-cy), 2))
+				if p%7 == 0 || distFromCenter < float64(w.height)/6 {
 					ch = w.clusterStyle.Render("*") // Galaxy clusters
 				} else if p%3 == 0 {
 					ch = w.galaxyStyle.Render(".") // Individual galaxies
@@ -91,15 +104,20 @@ func (w *GreatWall) View() string {
 				}
 				screen[screenY][screenX] = ch
 
-				// Add branches at regular intervals
-				if p%10 == 0 {
-					// Calculate branch length based on position
-					branchLen := 4.0 - (math.Abs(wave) * 2.0) // Shorter branches at peaks
+				// Dynamic branch generation
+				branchProb := 0.15 + math.Sin(progress*math.Pi*2+w.offset)*0.05
+				if rand(int(x*1000)) < branchProb {
+					// Calculate branch length based on position and flow
+					flowStrength := math.Abs(wave) + math.Abs(math.Sin(w.offset+phase))
+					branchLen := 3.0 + math.Sin(phase*2+w.offset)*2.0 - flowStrength
 
 					// Create two branches in opposite directions
 					for b := 1.0; b <= branchLen; b++ {
-						// Branch angle varies with position and time
-						branchAngle := math.Sin(phase+w.offset*0.5) * math.Pi / 3
+						// Branch angle varies with position, time, and flow
+						baseAngle := math.Atan2(y-float64(cy), x-float64(cx))
+						branchAngle := baseAngle +
+							math.Sin(phase+w.offset*0.5)*math.Pi/3 +
+							math.Sin(w.offset*0.7+float64(fil))*math.Pi/6
 
 						// Calculate branch endpoints
 						dx1 := int(b * math.Cos(branchAngle))
