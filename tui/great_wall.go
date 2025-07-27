@@ -2,15 +2,13 @@ package main
 
 import (
 	"math"
-	"time"
-	"unsafe"
 
-	"github.com/charmbracelet/bubbles/timer"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type GreatWall struct {
+	*DefaultAnimation
+
 	numFilaments  int     // Number of filament strands
 	pointsPerFil  int     // Points per filament
 	wallCurvature float64 // How much the wall curves
@@ -18,57 +16,28 @@ type GreatWall struct {
 	wallLength    float64 // Length of the wall structure
 	offset        float64 // Animation offset
 
-	width  int
-	height int
-
 	// Visual styles for different parts of the wall
 	galaxyStyle   lipgloss.Style // Individual galaxy points
 	clusterStyle  lipgloss.Style // Dense galaxy clusters
 	filamentStyle lipgloss.Style // Connecting filaments
 }
 
-func (w *GreatWall) Initialize() {
-	w.numFilaments = 3
-	w.pointsPerFil = 80
-	w.wallCurvature = 0.3
-	w.flowSpeed = 0.05
-	w.wallLength = 20.0
-	w.offset = 0.0
-	w.width = 100
-	w.height = 30
+func NewGreatWall() *GreatWall {
+	w := &GreatWall{
+		numFilaments:  3,
+		pointsPerFil:  80,
+		wallCurvature: 0.3,
+		flowSpeed:     0.05,
+		wallLength:    20,
+		offset:        0.0,
 
-	// Initialize styles for different components
-	w.galaxyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))   // Light blue
-	w.clusterStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("51"))  // Bright cyan
-	w.filamentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("27")) // Deep blue
-}
-
-func (w *GreatWall) SetDimensions(width, height int) {
-	w.width = width
-	w.height = height
-	if w.width < 20 {
-		w.width = 20
+		// Initialize lipgloss styles for the great wall
+		galaxyStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true), // Light blue
+		clusterStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("51")),            // Bright cyan
+		filamentStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("27")),            // Deep blue
 	}
-	if w.height < 10 {
-		w.height = 10
-	}
-}
-
-func (w *GreatWall) Init() tea.Cmd {
-	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
-		return timer.TickMsg{ID: int(uintptr(unsafe.Pointer(w)))}
-	})
-}
-
-func (w *GreatWall) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch m := msg.(type) {
-	case timer.TickMsg:
-		if m.ID == int(uintptr(unsafe.Pointer(w))) {
-			w.Tick()
-			return w, w.Init()
-		}
-	}
-	return w, nil
+	w.DefaultAnimation = NewDefaultAnimation(w)
+	return w
 }
 
 func (w *GreatWall) Tick() {

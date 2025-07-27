@@ -2,15 +2,13 @@ package main
 
 import (
 	"math"
-	"time"
-	"unsafe"
 
-	"github.com/charmbracelet/bubbles/timer"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type Galaxy struct {
+	*DefaultAnimation
+
 	numArms      int
 	pointsPerArm int
 	armSpread    float64
@@ -18,57 +16,28 @@ type Galaxy struct {
 	galaxyRadius float64
 	angle        float64
 
-	width  int
-	height int
-
 	dotStyle  lipgloss.Style
 	starStyle lipgloss.Style
 	orbStyle  lipgloss.Style
 	coreStyle lipgloss.Style
 }
 
-func (g *Galaxy) Initialize() {
-	g.numArms = 4
-	g.pointsPerArm = 60
-	g.armSpread = 0.5
-	g.spinSpeed = 0.12
-	g.galaxyRadius = 15.0
-	g.width = 80
-	g.height = 24
+func NewGalaxy() *Galaxy {
+	g := &Galaxy{
+		numArms:      4,
+		pointsPerArm: 60,
+		armSpread:    0.5,
+		spinSpeed:    0.12,
+		galaxyRadius: 15.0,
 
-	// Initialize lipgloss styles for spiral colors
-	g.dotStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("33"))              // Blue
-	g.starStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("36"))             // Cyan
-	g.orbStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("226"))             // Yellow
-	g.coreStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true) // Red
-}
-
-func (g *Galaxy) SetDimensions(width, height int) {
-	g.width = width
-	g.height = height
-	if g.width < 10 {
-		g.width = 10 // Minimum width
+		// Initialize lipgloss styles for spiral colors
+		dotStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("33")),             // Blue
+		starStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("36")),             // Cyan
+		orbStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("226")),            // Yellow
+		coreStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true), // Red
 	}
-	if g.height < 10 {
-		g.height = 10 // Minimum height
-	}
-}
-
-func (g *Galaxy) Init() tea.Cmd {
-	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
-		return timer.TickMsg{ID: int(uintptr(unsafe.Pointer(g)))}
-	})
-}
-
-func (g *Galaxy) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch m := msg.(type) {
-	case timer.TickMsg:
-		if m.ID == int(uintptr(unsafe.Pointer(g))) {
-			g.Tick()
-			return g, g.Init()
-		}
-	}
-	return g, nil
+	g.DefaultAnimation = NewDefaultAnimation(g)
+	return g
 }
 
 func (g *Galaxy) Tick() {

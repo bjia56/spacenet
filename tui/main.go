@@ -9,10 +9,13 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
+	"unsafe"
 
 	"github.com/bjia56/gosendip"
 	"github.com/bjia56/spacenet/server/api"
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/timer"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -76,17 +79,46 @@ func (ut *UnitTables) SetWidth(width int) {
 	}
 }
 
-// Block granularity mappings
-var unitMappings = [8]string{
-	t16:  "Superstructure",
-	t32:  "Supercluster",
-	t48:  "Galaxy Group",
-	t64:  "Galaxy",
-	t80:  "Star Group",
-	t96:  "Solar System",
-	t112: "Planet",
-	t128: "City",
+// Animations
+type UnitAnimations [8]Animation
+
+func (ua *UnitAnimations) Initialize() {
+	*ua = UnitAnimations{
+		NewGreatWall(),
+		NewSupercluster(),
+		NewGalaxyGroup(),
+		NewGalaxy(),
+		NewStarCluster(),
+		NewSolarSystem(),
+		NewPlanet(GasGiant),
+		NewCity(),
+	}
 }
+
+func (ua *UnitAnimations) SetDimensions(width, height int) {
+	for i := range ua {
+		ua[i].SetDimensions(width, height)
+	}
+}
+
+func (ua *UnitAnimations) Ticker() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return timer.TickMsg{ID: int(uintptr(unsafe.Pointer(ua)))}
+	})
+}
+
+func (ua *UnitAnimations) Update(msg tea.Msg, level level) tea.Cmd {
+	switch msg := msg.(type) {
+	case timer.TickMsg:
+		if msg.ID == int(uintptr(unsafe.Pointer(ua))) {
+			ua[level].Tick()
+			return ua.Ticker()
+		}
+	}
+	return nil
+}
+
+// Block granularity mappings
 var subnetMappings = [8]int{
 	t16:  16,
 	t32:  32,
@@ -111,8 +143,7 @@ type Model struct {
 	viewing       level
 	refreshClaims bool // Whether to refresh claims on the next update
 
-	galaxy *Galaxy    // Galaxy model for visual representation
-	wall   *GreatWall // Great Wall model for visual representation
+	animationModels UnitAnimations // Animation models for visualizations
 
 	statusMessage string
 	errorMessage  string
@@ -140,14 +171,11 @@ func Initialize(serverAddr string, httpPort, udpPort int, name string) *Model {
 		udpPort:       udpPort,
 		name:          name,
 		refreshClaims: true,
-		galaxy:        &Galaxy{},
-		wall:          &GreatWall{},
 	}
 	m.unitTables.Initialize()
 	m.shadowTables.Initialize()
 	m.PopulateTable("", t16)
-	m.galaxy.Initialize()
-	m.wall.Initialize()
+	m.animationModels.Initialize()
 	return m
 }
 
@@ -241,8 +269,7 @@ func (m *Model) GetParentSelection(level level) string {
 // Init initializes the application
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
-		m.galaxy.Init(),
-		m.wall.Init(),
+		m.animationModels.Ticker(),
 	)
 }
 
@@ -255,8 +282,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		reserved := 6
 		m.unitTables.SetHeight(msg.Height - reserved)
 		m.unitTables.SetWidth((msg.Width / 2) - 2)
-		m.galaxy.SetDimensions(m.unitTables[0].Width(), m.unitTables[0].Height())
-		m.wall.SetDimensions(m.unitTables[0].Width(), m.unitTables[0].Height())
+		m.animationModels.SetDimensions(m.unitTables[0].Width(), m.unitTables[0].Height())
 
 	case tea.KeyMsg:
 		m.statusMessage = ""
@@ -304,19 +330,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshClaims = true // Refresh claims if cursor changed
 	}
 
-	// Update the galaxy model
-	g, cmd := m.galaxy.Update(msg)
-	if cmd != nil {
+	// Update the animation model
+	if cmd := m.animationModels.Update(msg, m.viewing); cmd != nil {
 		cmds = append(cmds, cmd)
 	}
-	m.galaxy = g.(*Galaxy)
-
-	// Update the wall model
-	w, cmd := m.wall.Update(msg)
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-	m.wall = w.(*GreatWall)
 
 	return m, tea.Batch(cmds...)
 }
@@ -338,7 +355,7 @@ func (m *Model) View() string {
 		lipgloss.JoinHorizontal(
 			lipgloss.Bottom,
 			tableStyle.Render(m.unitTables[m.viewing].View()),
-			tableStyle.Render(m.wall.View()),
+			tableStyle.Render(m.animationModels[m.viewing].View()),
 		) + "\n" + msg + "\n" +
 		helpStyle("enter: select subnet, esc: back, q: quit")
 }
