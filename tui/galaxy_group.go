@@ -32,36 +32,46 @@ type MajorGalaxy struct {
 
 func NewGalaxyGroup() *GalaxyGroup {
 	g := &GalaxyGroup{
-		satelliteCount:   40,
-		orbitSpeed:       0.02,
-		interactStrength: 0.7,
+		satelliteCount:   60,    // More satellite galaxies
+		orbitSpeed:       0.015, // Slower, more majestic motion
+		interactStrength: 0.85,  // Stronger interactions
 	}
 	g.DefaultAnimation = NewDefaultAnimation(g)
 
-	// Initialize major galaxies (similar to Local Group)
+	// Initialize major galaxies (enhanced Local Group representation)
 	g.majorGalaxies = []MajorGalaxy{
 		{ // Milky Way analog
-			size:       1.0,
-			orbitDist:  float64(g.height) * 0.2,
+			size:       1.2,
+			orbitDist:  float64(g.height) * 0.28,
 			orbitAngle: 0,
 		},
-		{ // Andromeda analog
-			size:       1.2,
-			orbitDist:  float64(g.height) * 0.2,
+		{ // Andromeda analog (M31)
+			size:       1.5, // Larger than Milky Way
+			orbitDist:  float64(g.height) * 0.28,
 			orbitAngle: math.Pi,
 		},
-		{ // Triangulum analog
-			size:       0.6,
-			orbitDist:  float64(g.height) * 0.3,
+		{ // Triangulum analog (M33)
+			size:       0.9,
+			orbitDist:  float64(g.height) * 0.38,
 			orbitAngle: math.Pi * 0.5,
+		},
+		{ // Large Magellanic Cloud analog
+			size:       0.6,
+			orbitDist:  float64(g.height) * 0.2,
+			orbitAngle: math.Pi * 1.7,
+		},
+		{ // Small Magellanic Cloud analog
+			size:       0.45,
+			orbitDist:  float64(g.height) * 0.22,
+			orbitAngle: math.Pi * 1.8,
 		},
 	}
 
-	// Initialize styles
-	g.majorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("99"))      // Bright white
-	g.satelliteStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("246")) // Gray
-	g.streamStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))    // Dark gray
-	g.dustStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))      // Medium gray
+	// Initialize styles with richer colors
+	g.majorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("159")).Bold(true) // Bright cyan-white
+	g.satelliteStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("147"))        // Light purple
+	g.streamStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("61"))            // Soft blue
+	g.dustStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("237"))             // Dark dust
 	return g
 }
 
@@ -91,27 +101,49 @@ func (g *GalaxyGroup) View() string {
 	for i := range g.majorGalaxies {
 		galaxy := &g.majorGalaxies[i]
 
-		// Calculate galaxy center position
-		galaxy.x = float64(cx) + math.Cos(galaxy.orbitAngle)*galaxy.orbitDist*2.0
-		galaxy.y = float64(cy) + math.Sin(galaxy.orbitAngle)*galaxy.orbitDist
+		// Calculate galaxy center position with wider orbital paths
+		aspectRatio := float64(g.width) / float64(g.height)
+		galaxy.x = float64(cx) + math.Cos(galaxy.orbitAngle)*galaxy.orbitDist*aspectRatio*1.8
+		galaxy.y = float64(cy) + math.Sin(galaxy.orbitAngle)*galaxy.orbitDist*0.9
 
-		// Draw spiral arms for each major galaxy
-		arms := 4
-		pointsPerArm := 20
+		// Draw spiral arms with varying structure based on galaxy size
+		arms := 4 + int(galaxy.size*2) // More arms for larger galaxies
+		pointsPerArm := 35             // More points for denser arms
+
+		// Calculate arm tightness based on galaxy size and screen dimensions
+		screenScale := math.Min(float64(g.width), float64(g.height)) / 100.0
+		armTightness := (0.3 + 0.15*math.Sin(galaxy.angle*0.5)) * screenScale
+
 		for arm := 0; arm < arms; arm++ {
-			armAngle := float64(arm)*2*math.Pi/float64(arms) + galaxy.angle
-			for p := 0; p < pointsPerArm; p++ {
-				r := float64(p) / float64(pointsPerArm) * galaxy.size * float64(g.height/6)
-				theta := armAngle + r*0.5
+			// Base angle plus slight asymmetry
+			armAngle := float64(arm)*2*math.Pi/float64(arms) + galaxy.angle +
+				0.2*math.Sin(float64(arm)+galaxy.angle)
 
-				x := int(galaxy.x + r*math.Cos(theta))
-				y := int(galaxy.y + r*math.Sin(theta)*0.5)
+			for p := 0; p < pointsPerArm; p++ {
+				progress := float64(p) / float64(pointsPerArm)
+
+				// Radius with enhanced arm length and perturbations
+				baseRadius := math.Min(float64(g.width), float64(g.height)) / 4.2
+				r := progress * galaxy.size * baseRadius
+
+				// Add more complex spiral arm structure
+				armWave := 0.2 * math.Sin(progress*4+galaxy.angle) * (1.0 - progress*0.5)
+				spiralTwist := math.Pow(progress, 0.7) // Non-linear spiral winding
+				theta := armAngle + r*armTightness*spiralTwist + armWave
+
+				// Calculate position with enhanced elliptical distortion
+				aspectScale := float64(g.width) / float64(g.height)
+				x := int(galaxy.x + r*math.Cos(theta)*math.Min(aspectScale, 1.2))
+				y := int(galaxy.y + r*math.Sin(theta)*0.6)
 
 				if x >= 0 && x < g.width && y >= 0 && y < g.height {
-					if p < pointsPerArm/3 {
-						screen[y][x] = g.majorStyle.Render("*")
+					// Vary the appearance based on position and galaxy size
+					if p < pointsPerArm/4 {
+						screen[y][x] = g.majorStyle.Render("@") // Bright core
+					} else if p < pointsPerArm/2 {
+						screen[y][x] = g.majorStyle.Render("*") // Inner arms
 					} else {
-						screen[y][x] = g.majorStyle.Render("·")
+						screen[y][x] = g.majorStyle.Render("·") // Outer regions
 					}
 				}
 			}
@@ -120,18 +152,40 @@ func (g *GalaxyGroup) View() string {
 		// Draw tidal streams between major galaxies
 		if i > 0 {
 			prev := g.majorGalaxies[i-1]
-			steps := 10
+			steps := 15
+
+			// Calculate interaction strength based on galaxy sizes and distances
+			dx, dy := galaxy.x-prev.x, galaxy.y-prev.y
+			dist := math.Sqrt(dx*dx + dy*dy)
+			interaction := g.interactStrength * (galaxy.size + prev.size) / (dist + 1)
+
 			for s := 0; s < steps; s++ {
 				progress := float64(s) / float64(steps)
-				// Add wave effect to the streams
-				wave := math.Sin(progress*math.Pi*2+g.offset) * float64(g.height/10)
 
+				// Complex wave pattern based on interaction strength
+				wave1 := math.Sin(progress*math.Pi*2+g.offset) * float64(g.height/8)
+				wave2 := math.Cos(progress*math.Pi*3+g.offset*0.7) * float64(g.height/12)
+				finalWave := (wave1 + wave2) * interaction
+
+				// Calculate stream position with gravitational curvature
 				x := int(prev.x + (galaxy.x-prev.x)*progress)
-				y := int(prev.y + (galaxy.y-prev.y)*progress + wave)
+				y := int(prev.y + (galaxy.y-prev.y)*progress + finalWave)
 
-				if x >= 0 && x < g.width && y >= 0 && y < g.height {
-					if screen[y][x] == " " {
-						screen[y][x] = g.streamStyle.Render("∙")
+				// Draw wider streams near galaxies
+				streamWidth := int(2 * (1 - math.Abs(progress-0.5)))
+
+				for w := -streamWidth; w <= streamWidth; w++ {
+					drawX := x + w
+					drawY := y + w/2
+
+					if drawX >= 0 && drawX < g.width && drawY >= 0 && drawY < g.height {
+						if screen[drawY][drawX] == " " {
+							if math.Abs(float64(w)) < float64(streamWidth)/2 {
+								screen[drawY][drawX] = g.streamStyle.Render("∙")
+							} else {
+								screen[drawY][drawX] = g.dustStyle.Render("·")
+							}
+						}
 					}
 				}
 			}
@@ -144,26 +198,55 @@ func (g *GalaxyGroup) View() string {
 		majorIndex := i % len(g.majorGalaxies)
 		major := g.majorGalaxies[majorIndex]
 
-		// Calculate satellite position
-		satAngle := float64(i)*2*math.Pi/float64(g.satelliteCount) + g.offset*(1.0+float64(i)*0.1)
-		satDist := float64(g.height/8) * (0.5 + math.Sin(float64(i))*0.3)
+		// Calculate unique orbital parameters for each satellite
+		baseFreq := 1.0 + float64(i%3)*0.2
+		satAngle := float64(i)*2*math.Pi/float64(g.satelliteCount) +
+			g.offset*baseFreq +
+			math.Sin(g.offset*0.5+float64(i))*0.2 // Orbital perturbations
 
-		x := int(major.x + math.Cos(satAngle)*satDist)
-		y := int(major.y + math.Sin(satAngle)*satDist*0.5)
+		// Enhanced satellite distribution with screen-aware scaling
+		screenScale := math.Min(float64(g.width), float64(g.height)) / 6
+		baseDist := screenScale * major.size
+
+		// More varied orbital distances
+		satDist := baseDist * (0.8 +
+			math.Sin(float64(i)*1.7)*0.3 + // Static variation
+			math.Sin(g.offset*0.7+float64(i))*0.2 + // Dynamic variation
+			math.Cos(float64(i)*0.5)*0.15) // Additional orbital diversity
+
+		// Calculate elliptical orbit with aspect ratio consideration
+		aspectRatio := float64(g.width) / float64(g.height)
+		x := int(major.x + math.Cos(satAngle)*satDist*math.Min(aspectRatio, 1.4))
+		y := int(major.y + math.Sin(satAngle)*satDist*0.7)
 
 		if x >= 0 && x < g.width && y >= 0 && y < g.height {
-			screen[y][x] = g.satelliteStyle.Render(".")
+			// Vary satellite appearance based on position
+			if i%5 == 0 {
+				screen[y][x] = g.satelliteStyle.Render("○") // Larger satellites
+			} else {
+				screen[y][x] = g.satelliteStyle.Render("·") // Small satellites
+			}
 		}
 
-		// Add dust trails for some satellites
-		if i%3 == 0 {
-			for d := 1; d < 3; d++ {
-				trailX := int(major.x + math.Cos(satAngle-float64(d)*0.2)*satDist)
-				trailY := int(major.y + math.Sin(satAngle-float64(d)*0.2)*satDist*0.5)
+		// Enhanced dust trails with varying density
+		if i%4 == 0 { // More frequent trails
+			trailLength := 4 + int(math.Sin(float64(i))*2)
+			for d := 1; d < trailLength; d++ {
+				// Calculate trail position with curved path
+				trailProgress := float64(d) / float64(trailLength)
+				trailAngle := satAngle - trailProgress*0.3
+				trailDist := satDist * (1.0 - trailProgress*0.2)
+
+				trailX := int(major.x + math.Cos(trailAngle)*trailDist*1.2)
+				trailY := int(major.y + math.Sin(trailAngle)*trailDist*0.6)
 
 				if trailX >= 0 && trailX < g.width && trailY >= 0 && trailY < g.height {
 					if screen[trailY][trailX] == " " {
-						screen[trailY][trailX] = g.dustStyle.Render("·")
+						if d < 2 {
+							screen[trailY][trailX] = g.dustStyle.Render("∙")
+						} else {
+							screen[trailY][trailX] = g.dustStyle.Render("·")
+						}
 					}
 				}
 			}
