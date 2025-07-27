@@ -16,6 +16,13 @@ type Supercluster struct {
 	offset            float64 // Animation offset
 	rotationAngle     float64 // Overall rotation of the structure
 
+	// Stored random parameters for deterministic rendering
+	clusterDistances []float64 // Random distance variations for each cluster
+	clusterPhases    []float64 // Random phase shifts for each cluster
+	filamentWidths   []float64 // Random width variations for each cluster
+	branchPatterns   []float64 // Random branching patterns
+	turbulenceSeeds  []float64 // Random seeds for turbulence
+
 	// Visual styles for different components
 	galaxyStyle    lipgloss.Style // Individual galaxies
 	clusterStyle   lipgloss.Style // Dense cluster centers
@@ -46,6 +53,48 @@ func (s *Supercluster) Tick() {
 	s.rotationAngle += s.flowSpeed * 0.1
 }
 
+func (s *Supercluster) ResetParameters() {
+	// Get random bytes for initial parameters
+	randParams := s.RandBytes(8)
+
+	// Set core parameters with random variations
+	s.numClusters = 10 + int(randParams[0]%6)        // 10-15 clusters
+	s.pointsPerCluster = 100 + int(randParams[1]%80) // 100-179 points
+	s.flowSpeed = 0.015 + float64(randParams[2]%20)/1000.0
+	s.attractorStrength = 0.75 + float64(randParams[3]%30)/100.0
+
+	// Reset animation state
+	s.offset = 0.0
+	s.rotationAngle = float64(randParams[4]) / 255.0 * math.Pi // Random initial rotation
+
+	// Initialize arrays for stored random parameters
+	s.clusterDistances = make([]float64, s.numClusters)
+	s.clusterPhases = make([]float64, s.numClusters)
+	s.filamentWidths = make([]float64, s.numClusters)
+	s.branchPatterns = make([]float64, s.pointsPerCluster)
+	s.turbulenceSeeds = make([]float64, s.pointsPerCluster)
+
+	// Get random bytes for all parameters
+	distBytes := s.RandBytes(s.numClusters)
+	phaseBytes := s.RandBytes(s.numClusters)
+	widthBytes := s.RandBytes(s.numClusters)
+	branchBytes := s.RandBytes(s.pointsPerCluster)
+	turbBytes := s.RandBytes(s.pointsPerCluster)
+
+	// Initialize cluster-specific random parameters
+	for i := 0; i < s.numClusters; i++ {
+		s.clusterDistances[i] = float64(distBytes[i]) / 255.0 * 0.4   // 0.0-0.4 variation
+		s.clusterPhases[i] = float64(phaseBytes[i]) / 255.0 * math.Pi // 0-π phase shift
+		s.filamentWidths[i] = 0.3 + float64(widthBytes[i])/255.0*0.4  // 0.3-0.7 width
+	}
+
+	// Initialize point-specific random parameters
+	for i := 0; i < s.pointsPerCluster; i++ {
+		s.branchPatterns[i] = float64(branchBytes[i]) / 255.0      // 0.0-1.0
+		s.turbulenceSeeds[i] = float64(turbBytes[i]) / 255.0 * 0.2 // 0.0-0.2
+	}
+}
+
 func (s *Supercluster) View() string {
 	screen := make([][]string, s.height)
 	for i := range screen {
@@ -68,18 +117,18 @@ func (s *Supercluster) View() string {
 		// Create varying distances for different filaments
 		baseClusterDist := math.Min(float64(s.width), float64(s.height)*2) * 0.4
 
-		// Each filament has a unique flow pattern
-		filamentPhase := float64(cluster) * math.Pi / 6
+		// Use stored random parameters for this cluster
+		filamentPhase := s.clusterPhases[cluster]
+		distVariation := s.clusterDistances[cluster]
 
-		// Calculate varying distances to create sheets and filaments
+		// Calculate varying distances using stored random parameters
 		clusterDist := baseClusterDist * (1.0 +
-			math.Sin(filamentPhase)*0.3 + // Sheet-like structure
-			math.Sin(float64(cluster)*2.7)*0.2 + // Length variation
-			math.Sin(s.offset*0.2+float64(cluster))*0.15) // Time-based motion
+			distVariation + // Base variation
+			math.Sin(s.offset*0.2+filamentPhase)*0.15) // Time-based motion
 
-		// Create asymmetric distribution like Laniakea
-		ellipticalFactor := 1.8 + math.Sin(baseAngle*2)*0.4 // Varying width
-		verticalFactor := 0.6 + math.Cos(baseAngle*3)*0.2   // Varying height
+		// Create asymmetric distribution using stored parameters
+		ellipticalFactor := 1.8 + s.filamentWidths[cluster]*0.4 // Varying width
+		verticalFactor := 0.6 + math.Cos(filamentPhase)*0.2     // Varying height
 
 		// Calculate base position with sheet-like structure
 		basex := float64(cx) + math.Cos(baseAngle)*clusterDist*ellipticalFactor
@@ -90,20 +139,21 @@ func (s *Supercluster) View() string {
 			// Calculate galaxy position with filamentary flow patterns
 			progress := float64(p) / float64(s.pointsPerCluster)
 
-			// Create branching filaments
-			branchPhase := math.Sin(progress*6 + float64(cluster)) // Branch variation
-			filamentWidth := 0.4 + 0.3*math.Pow(progress, 2.0)     // Filaments get thinner
+			// Use stored random parameters for branching and structure
+			branchPattern := s.branchPatterns[p]
+			turbSeed := s.turbulenceSeeds[p]
+			filamentWidth := s.filamentWidths[cluster] * (1.0 - 0.5*progress) // Thinner towards ends
 
-			// Complex angular variation for filamentary structure
+			// Complex angular variation using stored parameters
 			angle := baseAngle +
-				branchPhase*filamentWidth + // Branch spread
+				branchPattern*filamentWidth + // Fixed branch pattern
 				math.Sin(progress*math.Pi*3+s.offset)*0.3*filamentWidth + // Main flow
-				math.Sin(progress*7+s.offset*0.5)*0.15*filamentWidth // Fine structure
+				math.Sin(progress*5+s.offset*0.5)*0.15*filamentWidth // Fine structure
 
-			// Enhanced distance calculation for flowing filaments
-			flowStrength := s.attractorStrength * (1.0 + 0.2*math.Sin(progress*8+s.offset))
-			flowEffect := math.Pow(progress, 1.2) * flowStrength                      // Non-linear flow
-			turbulence := math.Sin(progress*12+s.offset*1.5) * 0.1 * (1.0 - progress) // Detail
+			// Enhanced distance calculation with stored turbulence
+			flowStrength := s.attractorStrength * (1.0 + 0.2*math.Sin(progress*6+s.offset))
+			flowEffect := math.Pow(progress, 1.2) * flowStrength
+			turbulence := turbSeed * math.Sin(s.offset*1.5) * (1.0 - progress) // Controlled turbulence
 			dist := clusterDist * (1.0 - flowEffect + turbulence)
 
 			// Calculate final position with filamentary structure

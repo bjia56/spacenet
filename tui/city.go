@@ -16,6 +16,11 @@ type City struct {
 	trafficDensity float64 // Density of traffic flows
 	offset         float64 // Animation offset
 
+	// Random parameters for deterministic rendering
+	buildingSeeds [][]float64 // Random values for building properties
+	roadSeeds     []float64   // Random values for road properties
+	weatherSeeds  []float64   // Random values for weather effects
+
 	// City characteristics
 	buildings []Building
 	roads     []Road
@@ -67,6 +72,40 @@ func (c *City) Tick() {
 
 	// Update styles based on time of day
 	c.updateStyles(c.dayNightCycle)
+}
+
+func (c *City) ResetParameters() {
+	// Initialize random parameters for buildings
+	c.buildingSeeds = make([][]float64, c.numBuildings)
+	buildingBytes := c.RandBytes(c.numBuildings * 8) // 8 random values per building
+	for i := range c.buildingSeeds {
+		c.buildingSeeds[i] = make([]float64, 8)
+		for j := range c.buildingSeeds[i] {
+			c.buildingSeeds[i][j] = float64(buildingBytes[i*8+j]) / 255.0
+		}
+	}
+
+	// Initialize random parameters for roads
+	roadBytes := c.RandBytes(5 * 8) // 8 random values per potential road
+	c.roadSeeds = make([]float64, len(roadBytes))
+	for i := range c.roadSeeds {
+		c.roadSeeds[i] = float64(roadBytes[i]) / 255.0
+	}
+
+	// Initialize random parameters for weather
+	weatherBytes := c.RandBytes(c.width * c.height)
+	c.weatherSeeds = make([]float64, len(weatherBytes))
+	for i := range c.weatherSeeds {
+		c.weatherSeeds[i] = float64(weatherBytes[i]) / 255.0
+	}
+
+	// Reset animation state
+	c.offset = 0
+	c.dayNightCycle = 0
+	c.weatherEffect = 0
+
+	// Regenerate city layout with new parameters
+	c.buildings = nil // Force regeneration in View
 }
 
 func (c *City) updateStyles(timeOfDay float64) {
@@ -140,13 +179,14 @@ func (c *City) generateCityLayout() {
 	// Generate main buildings
 	c.buildings = make([]Building, c.numBuildings)
 	for i := range c.buildings {
+		seeds := c.buildingSeeds[i]
 		c.buildings[i] = Building{
-			x:         int(cityRand(i*3) * float64(c.width)),
-			width:     3 + int(cityRand(i*7)*4),
-			height:    5 + int(cityRand(i*11)*float64(c.height)/2),
-			style:     int(cityRand(i*13) * 3),
-			lit:       cityRand(i * 17),
-			hasBeacon: cityRand(i*19) > 0.7,
+			x:         int(seeds[0] * float64(c.width)),
+			width:     3 + int(seeds[1]*4),
+			height:    5 + int(seeds[2]*float64(c.height)/2),
+			style:     int(seeds[3] * 3),
+			lit:       seeds[4],
+			hasBeacon: seeds[5] > 0.7,
 		}
 		c.buildings[i].y = c.height - c.buildings[i].height
 	}
@@ -161,7 +201,7 @@ func (c *City) generateCityLayout() {
 			startY:  y,
 			endX:    c.width,
 			endY:    y,
-			traffic: 0.5 + cityRand(i*23)*0.5,
+			traffic: 0.5 + c.roadSeeds[i]*0.5,
 		}
 	}
 }
@@ -170,7 +210,8 @@ func (c *City) drawBackground(screen [][]string) {
 	// Draw sky with weather effects
 	for y := 0; y < c.height; y++ {
 		for x := 0; x < c.width; x++ {
-			if cityRand(x*y) > 0.9 {
+			seedIndex := y*c.width + x
+			if seedIndex < len(c.weatherSeeds) && c.weatherSeeds[seedIndex] > 0.9 {
 				if c.weatherEffect > 0.5 { // Rain
 					screen[y][x] = c.backgroundStyle.Render("|")
 				} else if c.weatherEffect < -0.5 { // Snow
@@ -195,14 +236,17 @@ func (c *City) drawSkyline(screen [][]string) {
 }
 
 func (c *City) drawBuildings(screen [][]string) {
-	for _, building := range c.buildings {
+	for buildingIndex, building := range c.buildings {
+		seeds := c.buildingSeeds[buildingIndex]
 		// Draw building structure
 		for y := building.y; y < c.height; y++ {
 			for x := building.x; x < building.x+building.width && x < c.width; x++ {
 				if x >= 0 && y >= 0 && x < c.width && y < c.height {
 					// Draw windows
 					if (x-building.x)%(building.style+2) == 1 && (y-building.y)%3 == 1 {
-						if cityRand(int(c.offset)*x*y) < building.lit {
+						// Use building seed and position for window lighting
+						windowSeed := (seeds[6] + math.Sin(c.offset+float64(x+y)*seeds[7])) * 0.5
+						if windowSeed < building.lit {
 							screen[y][x] = c.highlightStyle.Render("■")
 						} else {
 							screen[y][x] = c.windowStyle.Render("□")
@@ -247,10 +291,4 @@ func (c *City) drawRoads(screen [][]string) {
 			}
 		}
 	}
-}
-
-// Simple deterministic random number generator for consistent layouts
-func cityRand(seed int) float64 {
-	x := float64(seed * 12345)
-	return (math.Sin(x) + 1.0) * 0.5
 }

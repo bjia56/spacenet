@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/md5"
 	"encoding/binary"
-	"io"
 	"math/rand"
 	"net"
 
@@ -14,9 +13,9 @@ import (
 type Animation interface {
 	tea.Model
 	Tick()
+	ResetParameters()
 	SetDimensions(width, height int)
 	AnimateForIP(ip net.IP)
-	RandBytes(n int) []byte
 }
 
 // DefaultAnimation is to be embedded in other animations to define
@@ -26,7 +25,7 @@ type DefaultAnimation struct {
 	height int
 
 	parent Animation
-	ip     net.IP
+	ip     *net.IP
 	rand   *rand.Rand
 }
 
@@ -36,7 +35,6 @@ func NewDefaultAnimation(parent Animation) *DefaultAnimation {
 		height: 24,
 		parent: parent,
 	}
-	d.AnimateForIP(net.IPv6zero)
 	return d
 }
 
@@ -65,13 +63,14 @@ func (d *DefaultAnimation) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (d *DefaultAnimation) AnimateForIP(ip net.IP) {
-	if ip.Equal(d.ip) {
-		return // No change
+	if d.ip != nil && d.ip.Equal(ip) {
+		return // Already set for this IP
 	}
-	d.ip = ip
+	d.ip = &ip
 	h := md5.New()
-	io.WriteString(h, ip.String())
+	h.Write(ip)
 	d.rand = rand.New(rand.NewSource(int64(binary.BigEndian.Uint64(h.Sum(nil)))))
+	d.parent.ResetParameters()
 }
 
 func (d *DefaultAnimation) RandBytes(n int) []byte {

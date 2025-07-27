@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/charmbracelet/lipgloss"
@@ -16,6 +17,11 @@ type PlanetView struct {
 	ringWidth     float64    // Width of ring system
 	offset        float64    // Animation offset
 	atmosphere    bool       // Whether planet has visible atmosphere
+
+	// Random parameters for deterministic rendering
+	featureSeeds []float64 // Random values for surface features
+	moonSeeds    []float64 // Random values for moon positions
+	ringSeeds    []float64 // Random values for ring patterns
 
 	// Surface features
 	bands        int     // Number of atmospheric/surface bands
@@ -42,64 +48,17 @@ const (
 	IceGiant
 )
 
-func NewPlanet(kind PlanetKind) *PlanetView {
+func NewPlanet() *PlanetView {
 	p := &PlanetView{
-		planetType:    kind,
 		rotationSpeed: 0.05,
 		offset:        0,
 	}
 	p.DefaultAnimation = NewDefaultAnimation(p)
 
-	// Set characteristics based on planet type
-	switch kind {
-	case GasGiant:
-		p.bands = 5
-		p.bandSpeed = 0.03
-		p.spotSize = 0.15
-		p.spotLat = 0.3
-		p.numMoons = 4
-		p.hasRings = true
-		p.ringWidth = 0.8
-		p.atmosphere = true
-
-		// Jupiter-like colors
-		p.surfaceStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("222"))    // Light yellow
-		p.spotStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("160"))       // Red
-		p.bandStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("215"))       // Orange
-		p.ringStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("242"))       // Gray
-		p.atmosphereStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("230")) // Light yellow
-
-	case RockyPlanet:
-		p.bands = 3
-		p.bandSpeed = 0.01
-		p.numMoons = 1
-		p.hasRings = false
-		p.atmosphere = true
-
-		// Earth-like colors
-		p.surfaceStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("32"))     // Green
-		p.spotStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("27"))        // Blue
-		p.bandStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("195"))       // Light blue
-		p.atmosphereStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("195")) // Light blue
-
-	case IceGiant:
-		p.bands = 4
-		p.bandSpeed = 0.02
-		p.numMoons = 2
-		p.hasRings = true
-		p.ringWidth = 0.4
-		p.atmosphere = true
-
-		// Neptune-like colors
-		p.surfaceStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))     // Cyan
-		p.spotStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("33"))        // Blue
-		p.bandStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("45"))        // Light blue
-		p.ringStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("242"))       // Gray
-		p.atmosphereStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("195")) // Light cyan
-	}
-
+	// Initialize base styles that are common across planet types
 	p.moonStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))   // Light gray
 	p.shadowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("236")) // Dark gray
+	p.ringStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("242"))   // Gray
 
 	return p
 }
@@ -107,6 +66,92 @@ func NewPlanet(kind PlanetKind) *PlanetView {
 func (p *PlanetView) Tick() {
 	p.offset += p.rotationSpeed
 	p.spotRotation += p.bandSpeed
+}
+
+func (p *PlanetView) ResetParameters() {
+	// Generate random parameters
+	typeBytes := p.RandBytes(1)[0]
+	featureBytes := p.RandBytes(8) // For various surface features
+	moonBytes := p.RandBytes(4)    // For moon parameters
+	ringBytes := p.RandBytes(4)    // For ring parameters
+
+	// Convert to normalized floats
+	p.featureSeeds = make([]float64, 8)
+	for i := range p.featureSeeds {
+		p.featureSeeds[i] = float64(featureBytes[i]) / 255.0
+	}
+	p.moonSeeds = make([]float64, 4)
+	for i := range p.moonSeeds {
+		p.moonSeeds[i] = float64(moonBytes[i]) / 255.0
+	}
+	p.ringSeeds = make([]float64, 4)
+	for i := range p.ringSeeds {
+		p.ringSeeds[i] = float64(ringBytes[i]) / 255.0
+	}
+
+	// Determine planet type
+	switch {
+	case typeBytes < 85: // ~33% chance
+		p.planetType = RockyPlanet
+	case typeBytes < 170: // ~33% chance
+		p.planetType = GasGiant
+	default: // ~33% chance
+		p.planetType = IceGiant
+	}
+
+	// Set characteristics based on planet type
+	switch p.planetType {
+	case GasGiant:
+		p.bands = 4 + int(p.featureSeeds[0]*3)      // 4-6 bands
+		p.bandSpeed = 0.02 + p.featureSeeds[1]*0.02 // 0.02-0.04
+		p.spotSize = 0.1 + p.featureSeeds[2]*0.1    // 0.1-0.2
+		p.spotLat = -0.4 + p.featureSeeds[3]*0.8    // -0.4 to 0.4
+		p.numMoons = 2 + int(p.moonSeeds[0]*5)      // 2-6 moons
+		p.hasRings = p.ringSeeds[0] > 0.3           // 70% chance
+		p.ringWidth = 0.6 + p.ringSeeds[1]*0.4      // 0.6-1.0
+		p.atmosphere = true
+
+		// Jupiter-like colors with variation
+		baseHue := 220 + int(p.featureSeeds[4]*10)
+		p.surfaceStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", baseHue)))
+		p.spotStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("160"))
+		p.bandStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", baseHue-5)))
+		p.atmosphereStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", baseHue+8)))
+
+	case RockyPlanet:
+		p.bands = 2 + int(p.featureSeeds[0]*3)      // 2-4 bands
+		p.bandSpeed = 0.01 + p.featureSeeds[1]*0.01 // 0.01-0.02
+		p.numMoons = int(p.moonSeeds[0] * 2)        // 0-1 moons
+		p.hasRings = p.ringSeeds[0] > 0.9           // 10% chance
+		p.ringWidth = 0.3 + p.ringSeeds[1]*0.2      // 0.3-0.5
+		p.atmosphere = p.featureSeeds[2] > 0.2      // 80% chance
+
+		// Earth-like colors with variation
+		baseHue := 28 + int(p.featureSeeds[4]*8)
+		p.surfaceStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", baseHue)))
+		p.spotStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("27"))
+		p.bandStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("195"))
+		p.atmosphereStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("195"))
+
+	case IceGiant:
+		p.bands = 3 + int(p.featureSeeds[0]*3)        // 3-5 bands
+		p.bandSpeed = 0.015 + p.featureSeeds[1]*0.015 // 0.015-0.03
+		p.numMoons = 1 + int(p.moonSeeds[0]*3)        // 1-3 moons
+		p.hasRings = p.ringSeeds[0] > 0.5             // 50% chance
+		p.ringWidth = 0.4 + p.ringSeeds[1]*0.3        // 0.4-0.7
+		p.atmosphere = true
+
+		// Neptune-like colors with variation
+		baseHue := 37 + int(p.featureSeeds[4]*5)
+		p.surfaceStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", baseHue)))
+		p.spotStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("33"))
+		p.bandStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("45"))
+		p.atmosphereStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("195"))
+	}
+
+	// Reset animation offset
+	p.offset = 0
+	p.spotRotation = p.featureSeeds[5] * 2 * math.Pi // Random initial spot position
 }
 
 func (p *PlanetView) View() string {

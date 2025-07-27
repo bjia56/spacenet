@@ -91,7 +91,7 @@ func (ua *UnitAnimations) Initialize() {
 		NewGalaxy(),
 		NewStarCluster(),
 		NewSolarSystem(),
-		NewPlanet(GasGiant),
+		NewPlanet(),
 		NewCity(),
 	}
 }
@@ -269,6 +269,7 @@ func (m *Model) GetParentSelection(level level) string {
 
 // Init initializes the application
 func (m *Model) Init() tea.Cmd {
+	m.animationModels[m.viewing].AnimateForIP(net.IPv6zero)
 	return tea.Batch(
 		m.animationModels.Ticker(),
 	)

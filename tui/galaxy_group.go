@@ -15,6 +15,13 @@ type GalaxyGroup struct {
 	interactStrength float64       // Strength of gravitational interactions
 	offset           float64       // Animation offset
 
+	// Stored random parameters for deterministic rendering
+	armSeeds        [][]float64 // Random seeds for spiral arm variations per galaxy
+	satelliteOrbits []float64   // Random orbital parameters for satellites
+	satellitePhases []float64   // Random phase shifts for satellites
+	trailLengths    []int       // Random dust trail lengths
+	streamPatterns  []float64   // Random patterns for tidal streams
+
 	// Visual styles
 	majorStyle     lipgloss.Style // Major galaxies
 	satelliteStyle lipgloss.Style // Satellite galaxies
@@ -38,31 +45,31 @@ func NewGalaxyGroup() *GalaxyGroup {
 	}
 	g.DefaultAnimation = NewDefaultAnimation(g)
 
-	// Initialize major galaxies (enhanced Local Group representation)
+	// Initialize major galaxies with normalized distances (relative to 1.0)
 	g.majorGalaxies = []MajorGalaxy{
 		{ // Milky Way analog
 			size:       1.2,
-			orbitDist:  float64(g.height) * 0.28,
+			orbitDist:  0.18, // Normalized distance
 			orbitAngle: 0,
 		},
 		{ // Andromeda analog (M31)
-			size:       1.5, // Larger than Milky Way
-			orbitDist:  float64(g.height) * 0.28,
+			size:       1.5,
+			orbitDist:  0.18,
 			orbitAngle: math.Pi,
 		},
 		{ // Triangulum analog (M33)
 			size:       0.9,
-			orbitDist:  float64(g.height) * 0.38,
+			orbitDist:  0.28,
 			orbitAngle: math.Pi * 0.5,
 		},
 		{ // Large Magellanic Cloud analog
 			size:       0.6,
-			orbitDist:  float64(g.height) * 0.2,
+			orbitDist:  0.10,
 			orbitAngle: math.Pi * 1.7,
 		},
 		{ // Small Magellanic Cloud analog
 			size:       0.45,
-			orbitDist:  float64(g.height) * 0.22,
+			orbitDist:  0.12,
 			orbitAngle: math.Pi * 1.8,
 		},
 	}
@@ -86,6 +93,91 @@ func (g *GalaxyGroup) Tick() {
 	}
 }
 
+func (g *GalaxyGroup) ResetParameters() {
+	// Get random bytes for initial parameters
+	randParams := g.RandBytes(8)
+
+	// Set core parameters with random variations
+	g.satelliteCount = 50 + int(randParams[0]%30) // 50-79 satellites
+	g.orbitSpeed = 0.012 + float64(randParams[1]%10)/1000.0
+	g.interactStrength = 0.7 + float64(randParams[2]%40)/100.0
+
+	// Determine number of major galaxies (4-7)
+	numGalaxies := 4 + int(randParams[3]%4)
+
+	// Base templates for galaxy types
+	baseTemplates := []struct {
+		baseSize float64
+		baseDist float64
+	}{
+		{1.5, 0.18},  // Large spiral
+		{1.2, 0.20},  // Medium spiral
+		{0.9, 0.22},  // Small spiral
+		{0.6, 0.15},  // Dwarf galaxy
+		{0.45, 0.12}, // Small dwarf
+	}
+
+	// Get random bytes for galaxy placement
+	galaxyParams := g.RandBytes(numGalaxies * 3) // Size variation, distance variation, angle
+
+	// Initialize galaxies with random variations
+	g.majorGalaxies = make([]MajorGalaxy, numGalaxies)
+	galaxyVariations := g.RandBytes(numGalaxies * 2)
+
+	for i := 0; i < numGalaxies; i++ {
+		// Pick a random template for this galaxy
+		templateIdx := int(galaxyParams[i*3] % uint8(len(baseTemplates)))
+		template := baseTemplates[templateIdx]
+
+		// Calculate variations
+		sizeVar := float64(galaxyVariations[i*2]) / 255.0 * 0.2
+		distVar := float64(galaxyVariations[i*2+1]) / 255.0 * 0.1
+
+		// Calculate random angle for initial placement
+		angle := float64(galaxyParams[i*3+2]) / 255.0 * math.Pi * 2
+
+		g.majorGalaxies[i] = MajorGalaxy{
+			size:       template.baseSize * (0.9 + sizeVar),              // ±10% size variation
+			orbitDist:  template.baseDist * (1.0 + distVar),              // ±10% distance variation
+			orbitAngle: angle,                                            // Random initial angle
+			angle:      float64(randParams[3+i%5]) / 255.0 * math.Pi * 2, // Random initial rotation
+		}
+	}
+
+	// Initialize arm seeds for each galaxy
+	g.armSeeds = make([][]float64, len(g.majorGalaxies))
+	for i := range g.majorGalaxies {
+		armCount := 4 + int(g.majorGalaxies[i].size*2)
+		seeds := g.RandBytes(armCount * 2) // 2 random values per arm
+		g.armSeeds[i] = make([]float64, armCount*2)
+		for j := range seeds {
+			g.armSeeds[i][j] = float64(seeds[j]) / 255.0
+		}
+	}
+
+	// Initialize satellite parameters
+	g.satelliteOrbits = make([]float64, g.satelliteCount)
+	g.satellitePhases = make([]float64, g.satelliteCount)
+	g.trailLengths = make([]int, g.satelliteCount)
+
+	satBytes := g.RandBytes(g.satelliteCount * 3)
+	for i := 0; i < g.satelliteCount; i++ {
+		g.satelliteOrbits[i] = 0.7 + float64(satBytes[i])/255.0*0.6 // 0.7-1.3 orbit scale
+		g.satellitePhases[i] = float64(satBytes[i+g.satelliteCount]) / 255.0 * math.Pi * 2
+		g.trailLengths[i] = 3 + int(satBytes[i+g.satelliteCount*2]%4) // 3-6 length
+	}
+
+	// Initialize stream patterns
+	g.streamPatterns = make([]float64, len(g.majorGalaxies)*2)
+	streamBytes := g.RandBytes(len(g.majorGalaxies) * 2)
+	for i := range g.streamPatterns {
+		g.streamPatterns[i] = float64(streamBytes[i]) / 255.0
+	}
+
+	// Reset animation state
+	g.offset = 0.0
+}
+
 func (g *GalaxyGroup) View() string {
 	screen := make([][]string, g.height)
 	for i := range screen {
@@ -103,8 +195,8 @@ func (g *GalaxyGroup) View() string {
 
 		// Calculate galaxy center position with wider orbital paths
 		aspectRatio := float64(g.width) / float64(g.height)
-		galaxy.x = float64(cx) + math.Cos(galaxy.orbitAngle)*galaxy.orbitDist*aspectRatio*1.8
-		galaxy.y = float64(cy) + math.Sin(galaxy.orbitAngle)*galaxy.orbitDist*0.9
+		galaxy.x = float64(cx) + math.Cos(galaxy.orbitAngle)*galaxy.orbitDist*float64(g.height)*aspectRatio*1.8
+		galaxy.y = float64(cy) + math.Sin(galaxy.orbitAngle)*galaxy.orbitDist*float64(g.height)*0.9
 
 		// Draw spiral arms with varying structure based on galaxy size
 		arms := 4 + int(galaxy.size*2) // More arms for larger galaxies
@@ -115,9 +207,13 @@ func (g *GalaxyGroup) View() string {
 		armTightness := (0.3 + 0.15*math.Sin(galaxy.angle*0.5)) * screenScale
 
 		for arm := 0; arm < arms; arm++ {
-			// Base angle plus slight asymmetry
+			// Use stored random values for arm variation
+			armSeedBase := g.armSeeds[i][arm*2]
+			armSeedTwist := g.armSeeds[i][arm*2+1]
+
+			// Base angle with deterministic asymmetry
 			armAngle := float64(arm)*2*math.Pi/float64(arms) + galaxy.angle +
-				0.2*math.Sin(float64(arm)+galaxy.angle)
+				0.3*armSeedBase*math.Sin(float64(arm)+galaxy.angle)
 
 			for p := 0; p < pointsPerArm; p++ {
 				progress := float64(p) / float64(pointsPerArm)
@@ -126,9 +222,10 @@ func (g *GalaxyGroup) View() string {
 				baseRadius := math.Min(float64(g.width), float64(g.height)) / 4.2
 				r := progress * galaxy.size * baseRadius
 
-				// Add more complex spiral arm structure
-				armWave := 0.2 * math.Sin(progress*4+galaxy.angle) * (1.0 - progress*0.5)
-				spiralTwist := math.Pow(progress, 0.7) // Non-linear spiral winding
+				// Add more complex spiral arm structure with stored randomness
+				armWave := 0.2 * (0.8 + 0.4*armSeedBase) *
+					math.Sin(progress*4+galaxy.angle) * (1.0 - progress*0.5)
+				spiralTwist := math.Pow(progress, 0.6+0.2*armSeedTwist) // Variable winding
 				theta := armAngle + r*armTightness*spiralTwist + armWave
 
 				// Calculate position with enhanced elliptical distortion
@@ -162,9 +259,13 @@ func (g *GalaxyGroup) View() string {
 			for s := 0; s < steps; s++ {
 				progress := float64(s) / float64(steps)
 
-				// Complex wave pattern based on interaction strength
-				wave1 := math.Sin(progress*math.Pi*2+g.offset) * float64(g.height/8)
-				wave2 := math.Cos(progress*math.Pi*3+g.offset*0.7) * float64(g.height/12)
+				// Use stored patterns for stream variation
+				pattern1 := g.streamPatterns[i*2]
+				pattern2 := g.streamPatterns[i*2+1]
+
+				// Complex wave pattern with deterministic variation
+				wave1 := math.Sin(progress*math.Pi*(1.8+pattern1)+g.offset) * float64(g.height/8)
+				wave2 := math.Cos(progress*math.Pi*(2.5+pattern2)+g.offset*0.7) * float64(g.height/12)
 				finalWave := (wave1 + wave2) * interaction
 
 				// Calculate stream position with gravitational curvature
@@ -198,21 +299,19 @@ func (g *GalaxyGroup) View() string {
 		majorIndex := i % len(g.majorGalaxies)
 		major := g.majorGalaxies[majorIndex]
 
-		// Calculate unique orbital parameters for each satellite
-		baseFreq := 1.0 + float64(i%3)*0.2
+		// Use stored random parameters for satellite orbits
+		baseFreq := 1.0 + g.satelliteOrbits[i]*0.3
 		satAngle := float64(i)*2*math.Pi/float64(g.satelliteCount) +
 			g.offset*baseFreq +
-			math.Sin(g.offset*0.5+float64(i))*0.2 // Orbital perturbations
+			math.Sin(g.offset*0.5+g.satellitePhases[i])*0.2 // Deterministic perturbations
 
 		// Enhanced satellite distribution with screen-aware scaling
 		screenScale := math.Min(float64(g.width), float64(g.height)) / 6
 		baseDist := screenScale * major.size
 
-		// More varied orbital distances
-		satDist := baseDist * (0.8 +
-			math.Sin(float64(i)*1.7)*0.3 + // Static variation
-			math.Sin(g.offset*0.7+float64(i))*0.2 + // Dynamic variation
-			math.Cos(float64(i)*0.5)*0.15) // Additional orbital diversity
+		// Use stored orbital parameters for distance variation
+		satDist := baseDist * g.satelliteOrbits[i] * (0.8 +
+			math.Sin(g.offset*0.7+g.satellitePhases[i])*0.2) // Dynamic variation
 
 		// Calculate elliptical orbit with aspect ratio consideration
 		aspectRatio := float64(g.width) / float64(g.height)

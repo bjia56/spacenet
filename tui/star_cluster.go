@@ -16,6 +16,11 @@ type StarCluster struct {
 	brightness    float64 // Overall cluster brightness
 	offset        float64 // Animation offset
 
+	// Random parameters for deterministic rendering
+	starSeeds     []float64 // Random values for star properties
+	nebulaDensity []float64 // Random values for nebula density
+	dustSeeds     []float64 // Random values for dust lane properties
+
 	// Visual styles
 	brightStarStyle lipgloss.Style // Bright main sequence stars
 	faintStarStyle  lipgloss.Style // Fainter stars
@@ -53,6 +58,32 @@ func (s *StarCluster) Tick() {
 	s.offset += 0.03
 }
 
+func (s *StarCluster) ResetParameters() {
+	// Initialize star parameters
+	starBytes := s.RandBytes(s.numStars * 8)
+	s.starSeeds = make([]float64, s.numStars)
+	for i := range s.starSeeds {
+		s.starSeeds[i] = float64(starBytes[i]) / 255.0
+	}
+
+	// Initialize nebula parameters
+	nebulaBytes := s.RandBytes(200 * 8) // Match nebulaPoints in View
+	s.nebulaDensity = make([]float64, 200)
+	for i := range s.nebulaDensity {
+		s.nebulaDensity[i] = float64(nebulaBytes[i]) / 255.0
+	}
+
+	// Initialize dust parameters
+	dustBytes := s.RandBytes(30 * 8) // Match steps in View
+	s.dustSeeds = make([]float64, 30)
+	for i := range s.dustSeeds {
+		s.dustSeeds[i] = float64(dustBytes[i]) / 255.0
+	}
+
+	// Reset animation offset
+	s.offset = 0
+}
+
 func (s *StarCluster) View() string {
 	screen := make([][]string, s.height)
 	for i := range screen {
@@ -79,8 +110,8 @@ func (s *StarCluster) View() string {
 		y := int(float64(cy) + math.Sin(turbAngle)*radius)
 
 		if x >= 0 && x < s.width && y >= 0 && y < s.height {
-			// Add some variation to nebula density
-			if math.Sin(angle*5+s.offset) > 0.3 {
+			// Use pre-computed nebula density for deterministic patterns
+			if s.nebulaDensity[i] > 0.3+math.Sin(angle*3+s.offset)*0.2 {
 				screen[y][x] = s.nebulaStyle.Render("·")
 			}
 		}
@@ -97,7 +128,8 @@ func (s *StarCluster) View() string {
 			dist := float64(step) / float64(steps) * s.nebulaRadius * float64(s.height) * 2
 
 			// Create wavy dust lanes
-			wave := math.Sin(float64(step)*0.3+s.offset) * float64(s.height) * 0.1
+			wave := (s.dustSeeds[step]-0.5)*float64(s.height)*0.2 +
+				math.Sin(float64(step)*0.3+s.offset)*float64(s.height)*0.1
 
 			x := int(float64(cx) + math.Cos(angle)*dist)
 			y := int(float64(cy) + math.Sin(angle)*dist*0.5 + wave)
@@ -110,9 +142,9 @@ func (s *StarCluster) View() string {
 
 	// Draw the stars
 	for i := 0; i < s.numStars; i++ {
-		// Calculate star position with some clustering towards center
-		r := math.Pow(starRand(i), 0.5) * s.clusterRadius * float64(s.height)
-		angle := float64(i)*math.Phi*2 + s.offset*math.Sin(float64(i))
+		// Calculate star position using pre-computed random values
+		r := math.Pow(s.starSeeds[i], 0.5) * s.clusterRadius * float64(s.height)
+		angle := float64(i)*math.Phi*2 + s.offset*math.Sin(s.starSeeds[i]*10)
 
 		x := int(float64(cx) + math.Cos(angle)*r*2)
 		y := int(float64(cy) + math.Sin(angle)*r)
@@ -159,10 +191,4 @@ func (s *StarCluster) View() string {
 		output += "\n"
 	}
 	return output
-}
-
-// Simple deterministic random number generator for consistent star positions
-func starRand(seed int) float64 {
-	x := float64(seed * 12345)
-	return (math.Sin(x) + 1.0) * 0.5
 }

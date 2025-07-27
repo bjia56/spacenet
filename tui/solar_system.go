@@ -9,9 +9,15 @@ import (
 type SolarSystem struct {
 	*DefaultAnimation
 
-	numPlanets int      // Number of planets
+	minPlanets int      // Minimum number of planets
+	maxPlanets int      // Maximum number of planets
+	numPlanets int      // Current number of planets
 	planets    []Planet // Planet data
 	offset     float64  // Animation offset
+
+	// Random parameters for deterministic rendering
+	planetSeeds [][]float64 // Random values for planet properties
+	moonSeeds   [][]float64 // Random values for moon properties
 
 	// Visual styles
 	starStyle     lipgloss.Style // Central star
@@ -21,7 +27,7 @@ type SolarSystem struct {
 	moonStyle     lipgloss.Style // Moons
 	ringStyle     lipgloss.Style // Planetary rings
 	orbitStyle    lipgloss.Style // Orbit paths
-	asteroidStyle lipgloss.Style // Asteroid belt
+	asteroidStyle lipgloss.Style // Medium gray
 }
 
 type Planet struct {
@@ -44,11 +50,13 @@ const (
 
 func NewSolarSystem() *SolarSystem {
 	s := &SolarSystem{
-		numPlanets: 8,
+		minPlanets: 4,
+		maxPlanets: 12,
+		numPlanets: 8, // Default to 8 planets initially
 	}
 	s.DefaultAnimation = NewDefaultAnimation(s)
 
-	// Initialize planet data (roughly based on our solar system)
+	// Will be populated in ResetParameters
 	s.planets = []Planet{
 		{size: 0.4, orbitDist: 0.12, orbitSpeed: 4.15, ptype: Rocky},                           // Mercury
 		{size: 0.9, orbitDist: 0.2, orbitSpeed: 1.62, ptype: Rocky},                            // Venus
@@ -79,6 +87,93 @@ func (s *SolarSystem) Tick() {
 	for i := range s.planets {
 		s.planets[i].angle += s.planets[i].orbitSpeed * 0.02
 	}
+}
+
+func (s *SolarSystem) ResetParameters() {
+	// Randomize number of planets within range
+	numBytes := s.RandBytes(1)
+	s.numPlanets = s.minPlanets + int(float64(numBytes[0])/255.0*float64(s.maxPlanets-s.minPlanets))
+
+	// Generate random parameters for each planet
+	s.planetSeeds = make([][]float64, s.numPlanets)
+	s.moonSeeds = make([][]float64, s.numPlanets)
+	planetBytes := s.RandBytes(s.numPlanets * 8) // 8 random values per planet
+	moonBytes := s.RandBytes(s.numPlanets * 4)   // 4 random values per planet's moons
+
+	// Reset planet array
+	s.planets = make([]Planet, s.numPlanets)
+
+	for i := range s.planets {
+		// Convert random bytes to normalized floats
+		s.planetSeeds[i] = make([]float64, 8)
+		for j := range s.planetSeeds[i] {
+			s.planetSeeds[i][j] = float64(planetBytes[i*8+j]) / 255.0
+		}
+
+		s.moonSeeds[i] = make([]float64, 4)
+		for j := range s.moonSeeds[i] {
+			s.moonSeeds[i][j] = float64(moonBytes[i*4+j]) / 255.0
+		}
+
+		// Determine planet properties based on random values
+		typeRoll := s.planetSeeds[i][0]
+		var ptype PlanetType
+		switch {
+		case typeRoll < 0.5:
+			ptype = Rocky // 50% chance for rocky planets
+		case typeRoll < 0.8:
+			ptype = Gas // 30% chance for gas giants
+		default:
+			ptype = Ice // 20% chance for ice giants
+		}
+
+		// Calculate orbit distance with increasing gaps
+		minDist := 0.12 + float64(i)*0.08
+		maxDist := minDist + 0.1
+		orbitDist := minDist + s.planetSeeds[i][1]*(maxDist-minDist)
+
+		// Determine size based on type
+		var size float64
+		switch ptype {
+		case Rocky:
+			size = 0.4 + s.planetSeeds[i][2]*0.8 // 0.4 to 1.2
+		case Gas:
+			size = 1.5 + s.planetSeeds[i][2]*1.0 // 1.5 to 2.5
+		case Ice:
+			size = 1.0 + s.planetSeeds[i][2]*0.8 // 1.0 to 1.8
+		}
+
+		// Calculate orbital speed (faster for inner planets)
+		orbitSpeed := 4.0 * math.Pow(0.3/orbitDist, 1.5)
+
+		// Determine number of moons based on size and type
+		maxMoons := int(size * 3)
+		if ptype == Rocky {
+			maxMoons = 2 // Rocky planets have fewer moons
+		}
+		moons := int(s.moonSeeds[i][0] * float64(maxMoons+1))
+
+		// Gas giants are more likely to have rings
+		hasRings := false
+		if ptype == Gas {
+			hasRings = s.planetSeeds[i][3] > 0.5
+		} else if ptype == Ice {
+			hasRings = s.planetSeeds[i][3] > 0.8
+		}
+
+		// Initialize planet with calculated properties
+		s.planets[i] = Planet{
+			size:       size,
+			orbitDist:  orbitDist,
+			orbitSpeed: orbitSpeed,
+			angle:      s.planetSeeds[i][4] * 2 * math.Pi, // Random starting position
+			moons:      moons,
+			hasRings:   hasRings,
+			ptype:      ptype,
+		}
+	}
+
+	s.offset = 0
 }
 
 func (s *SolarSystem) View() string {
