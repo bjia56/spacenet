@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/charmbracelet/lipgloss"
@@ -28,9 +29,10 @@ type GalaxyGroup struct {
 	particleTypes     []byte       // Type of each particle (for visual variation)
 
 	// Visual styles
-	majorStyle     lipgloss.Style // Major galaxies
-	satelliteStyle lipgloss.Style // Satellite galaxies
-	dustStyle      lipgloss.Style // Interstellar dust
+	majorStyle     lipgloss.Style   // Major galaxies (used for particles)
+	galaxyStyles   []lipgloss.Style // Individual styles for each major galaxy
+	satelliteStyle lipgloss.Style   // Satellite galaxies
+	dustStyle      lipgloss.Style   // Interstellar dust
 }
 
 type MajorGalaxy struct {
@@ -105,8 +107,8 @@ func (g *GalaxyGroup) ResetParameters() {
 	g.orbitSpeed = 0.012 + float64(randParams[1]%10)/1000.0
 	g.interactStrength = 0.7 + float64(randParams[2]%40)/100.0
 
-	// Determine number of major galaxies (4-7)
-	numGalaxies := 4 + int(randParams[3]%4)
+	// Determine number of major galaxies (8-17)
+	numGalaxies := 8 + int(randParams[3]%10)
 
 	// Base templates for galaxy types
 	baseTemplates := []struct {
@@ -193,6 +195,56 @@ func (g *GalaxyGroup) ResetParameters() {
 		g.particleOrbits[i] = 0.5 + float64(particleBytes[i*4+3])/255.0 // Orbit speed multiplier
 		g.particleTypes[i] = particleBytes[i*4+3]
 	}
+
+	// Initialize per-galaxy color variations
+	galaxyColorBytes := g.RandBytes(len(g.majorGalaxies) * 2) // 2 bytes per galaxy for color variation
+
+	// Store color styles for each major galaxy
+	g.galaxyStyles = make([]lipgloss.Style, len(g.majorGalaxies))
+	for i, galaxy := range g.majorGalaxies {
+		// Base color selection based on galaxy characteristics
+		var baseColor int
+		if galaxy.size > 1.3 {
+			// Large galaxies: warmer colors (yellows and whites)
+			baseColor = 220 + int(galaxyColorBytes[i*2]%3) // 220-222: warm whites
+		} else if galaxy.size > 0.8 {
+			// Medium galaxies: blue-white colors
+			baseColor = 159 + int(galaxyColorBytes[i*2]%3) // 159-161: blue-whites
+		} else {
+			// Smaller galaxies: cooler blues
+			baseColor = 104 + int(galaxyColorBytes[i*2]%3) // 104-106: cool blues
+		}
+
+		// Add subtle tint variations based on orbit distance
+		if galaxy.orbitDist < 0.15 {
+			// Inner galaxies get slightly warmer
+			baseColor += 1
+		}
+
+		g.galaxyStyles[i] = lipgloss.NewStyle().
+			Foreground(lipgloss.Color(fmt.Sprintf("%d", baseColor))).
+			Bold(true)
+	}
+
+	// Use the first galaxy's style as the base major style (for particles)
+	if len(g.galaxyStyles) > 0 {
+		g.majorStyle = g.galaxyStyles[0]
+	} else {
+		// Fallback if no galaxies
+		g.majorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("159")).Bold(true)
+	}
+
+	// Get more random bytes for other colors
+	colorBytes := g.RandBytes(4)
+
+	// Satellite colors - variations of cool purples
+	satelliteColor := 146 + (colorBytes[0] % 3) // Range 146-148
+	g.satelliteStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", satelliteColor)))
+
+	// Dust colors - deeper indigos and dark purples
+	dustOptions := []string{"233", "234", "235", "236", "237", "238"}
+	dustIndex := int(colorBytes[1]) % len(dustOptions)
+	g.dustStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(dustOptions[dustIndex]))
 
 	// Reset animation state
 	g.offset = 0.0
@@ -302,13 +354,16 @@ func (g *GalaxyGroup) View() string {
 				y := int(galaxy.y + r*math.Sin(theta)*0.6)
 
 				if x >= 0 && x < g.width && y >= 0 && y < g.height {
+					// Use this galaxy's specific style
+					style := g.galaxyStyles[i]
+
 					// Vary the appearance based on position and galaxy size
 					if p < pointsPerArm/4 {
-						screen[y][x] = g.majorStyle.Render("@") // Bright core
+						screen[y][x] = style.Render("@") // Bright core
 					} else if p < pointsPerArm/2 {
-						screen[y][x] = g.majorStyle.Render("*") // Inner arms
+						screen[y][x] = style.Render("*") // Inner arms
 					} else {
-						screen[y][x] = g.majorStyle.Render("·") // Outer regions
+						screen[y][x] = style.Render("·") // Outer regions
 					}
 				}
 			}
