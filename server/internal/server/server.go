@@ -169,37 +169,37 @@ func (s *Server) processPackets() {
 		go func(workerID int) {
 			for job := range jobs {
 				clientIP := job.addr.IP.String()
-				
+
 				// Parse proof-of-work packet
 				packet, err := ParseClaimPacket(job.data)
 				if err != nil {
 					log.Printf("Failed to parse claim packet from %s: %v", clientIP, err)
 					continue
 				}
-				
+
 				// Create proof of work object
 				targetIP := net.ParseIP(clientIP)
 				if targetIP == nil {
 					log.Printf("Invalid IP address from client: %s", clientIP)
 					continue
 				}
-				
+
 				pow := packet.CreateProofOfWork(targetIP)
-				
+
 				// Validate proof of work
 				if claimStore, ok := s.store.(*ClaimStore); ok {
 					if err := claimStore.ValidateProofOfWork(pow); err != nil {
 						log.Printf("Invalid proof of work from %s (%s): %v", clientIP, packet.Claimant, err)
 						continue
 					}
-					
+
 					// Process the claim
 					err = s.store.ProcessClaim(clientIP, packet.Claimant)
 					if err != nil {
 						log.Printf("Failed to process claim from %s: %v", clientIP, err)
 					} else {
-						log.Printf("Address %s claimed by %s (difficulty: %d, nonce: %d)", 
-							clientIP, packet.Claimant, packet.Difficulty, packet.Nonce)
+						log.Printf("Address %s claimed by %s (nonce: %d)",
+							clientIP, packet.Claimant, packet.Nonce)
 					}
 				} else {
 					log.Printf("Store does not support proof of work validation")

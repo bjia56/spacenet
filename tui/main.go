@@ -182,23 +182,23 @@ func Initialize(serverAddr string, httpPort, udpPort int, name string) *Model {
 // GetDifficulty queries the server for the required difficulty for an IP
 func (m *Model) GetDifficulty(ip string) (*api.DifficultyResponse, error) {
 	url := fmt.Sprintf("http://%s:%d/api/ip/%s/difficulty", m.serverAddr, m.httpPort, ip)
-	
+
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query difficulty: %v", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
 	}
-	
+
 	var diffResp api.DifficultyResponse
 	if err := json.NewDecoder(resp.Body).Decode(&diffResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %v", err)
 	}
-	
+
 	return &diffResp, nil
 }
 
@@ -209,45 +209,44 @@ func (m *Model) SendClaim(ip string) (string, error) {
 	if targetIP == nil {
 		return "", fmt.Errorf("invalid IP address: %s", ip)
 	}
-	
+
 	// Get required difficulty from server
 	diffResp, err := m.GetDifficulty(ip)
 	if err != nil {
 		return "", fmt.Errorf("failed to get difficulty: %v", err)
 	}
-	
+
 	// Solve proof of work (limit to 10 million attempts)
 	pow, err := api.SolveProofOfWork(targetIP, m.name, diffResp.Difficulty, 10000000)
 	if err != nil {
 		return "", fmt.Errorf("failed to solve proof of work: %v", err)
 	}
-	
+
 	// Create claim packet
 	packet := &api.ClaimPacket{
-		Difficulty: pow.Difficulty,
-		Nonce:      pow.Nonce,
-		Claimant:   pow.Claimant,
+		Nonce:    pow.Nonce,
+		Claimant: pow.Claimant,
 	}
-	
+
 	// Serialize packet
 	data, err := packet.Serialize()
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize packet: %v", err)
 	}
-	
+
 	// Send UDP packet to server
 	serverAddr := fmt.Sprintf("[%s]:%d", m.serverAddr, m.udpPort)
 	udpAddr, err := net.ResolveUDPAddr("udp", serverAddr)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve server address: %v", err)
 	}
-	
+
 	conn, err := net.DialUDP("udp", nil, udpAddr)
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to server: %v", err)
 	}
 	defer conn.Close()
-	
+
 	// Set source address to the IP we're claiming
 	localAddr := &net.UDPAddr{IP: targetIP, Port: 0}
 	localConn, err := net.DialUDP("udp", localAddr, udpAddr)
@@ -258,13 +257,13 @@ func (m *Model) SendClaim(ip string) (string, error) {
 		conn.Close()
 		conn = localConn
 	}
-	
+
 	_, err = conn.Write(data)
 	if err != nil {
 		return "", fmt.Errorf("failed to send packet: %v", err)
 	}
-	
-	return fmt.Sprintf("Claim sent! Difficulty: %d, Nonce: %d", pow.Difficulty, pow.Nonce), nil
+
+	return fmt.Sprintf("Claim sent! Nonce: %d", pow.Nonce), nil
 }
 
 // PopulateTable populates a table with 2^16 rows

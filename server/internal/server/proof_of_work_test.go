@@ -10,31 +10,30 @@ import (
 func TestProofOfWork_IsValid(t *testing.T) {
 	// Test case: known valid proof of work
 	pow := &api.ProofOfWork{
-		Target:     net.ParseIP("2001:db8::1"),
-		Claimant:   "alice",
-		Nonce:      12345,
-		Difficulty: 8, // 8 leading zero bits
+		Target:   net.ParseIP("2001:db8::1"),
+		Claimant: "alice",
+		Nonce:    12345,
 	}
+	difficulty := uint8(8) // Example difficulty
 
 	// Find a valid nonce for this difficulty
-	validPow, err := api.SolveProofOfWork(pow.Target, pow.Claimant, pow.Difficulty, 1000000)
+	validPow, err := api.SolveProofOfWork(pow.Target, pow.Claimant, difficulty, 1000000)
 	if err != nil {
 		t.Fatalf("Failed to solve proof of work: %v", err)
 	}
 
-	if !validPow.IsValid() {
+	if !validPow.IsValid(difficulty) {
 		t.Error("Solved proof of work should be valid")
 	}
 
 	// Test invalid proof of work (wrong nonce)
 	invalidPow := &api.ProofOfWork{
-		Target:     validPow.Target,
-		Claimant:   validPow.Claimant,
-		Nonce:      validPow.Nonce + 1, // Wrong nonce
-		Difficulty: validPow.Difficulty,
+		Target:   validPow.Target,
+		Claimant: validPow.Claimant,
+		Nonce:    validPow.Nonce + 1, // Wrong nonce
 	}
 
-	if invalidPow.IsValid() {
+	if invalidPow.IsValid(difficulty) {
 		t.Error("Invalid proof of work should not be valid")
 	}
 }
@@ -83,9 +82,8 @@ func TestCalculateDifficulty(t *testing.T) {
 
 func TestClaimPacket_SerializeAndParse(t *testing.T) {
 	original := &api.ClaimPacket{
-		Difficulty: 12,
-		Nonce:      123456789,
-		Claimant:   "alice",
+		Nonce:    123456789,
+		Claimant: "alice",
 	}
 
 	// Serialize
@@ -101,10 +99,6 @@ func TestClaimPacket_SerializeAndParse(t *testing.T) {
 	}
 
 	// Verify fields
-	if parsed.Difficulty != original.Difficulty {
-		t.Errorf("Difficulty mismatch: expected %d, got %d", original.Difficulty, parsed.Difficulty)
-	}
-
 	if parsed.Nonce != original.Nonce {
 		t.Errorf("Nonce mismatch: expected %d, got %d", original.Nonce, parsed.Nonce)
 	}
@@ -113,7 +107,6 @@ func TestClaimPacket_SerializeAndParse(t *testing.T) {
 		t.Errorf("Claimant mismatch: expected %s, got %s", original.Claimant, parsed.Claimant)
 	}
 }
-
 
 func TestValidateProofOfWork(t *testing.T) {
 	store := NewClaimStore()
@@ -132,11 +125,9 @@ func TestValidateProofOfWork(t *testing.T) {
 	}
 
 	// Test with insufficient difficulty
-	invalidPow := &api.ProofOfWork{
-		Target:     target,
-		Claimant:   "alice",
-		Nonce:      validPow.Nonce,
-		Difficulty: requiredDifficulty - 1, // Too low
+	invalidPow, err := api.SolveProofOfWork(target, "alice", requiredDifficulty-1, 1000000)
+	if err != nil {
+		t.Fatalf("Failed to solve proof of work: %v", err)
 	}
 
 	if err := store.ValidateProofOfWork(invalidPow); err == nil {
