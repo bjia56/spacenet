@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/charmbracelet/lipgloss"
@@ -54,7 +55,7 @@ func (w *GreatWall) ResetParameters() {
 
 	// Use random bytes to create variations in the wall structure
 	w.numFilaments = 4 + int(randParams[0]%4)                // 4-7 filaments
-	w.pointsPerFil = 120 + int(randParams[1]%60)             // 120-179 points
+	w.pointsPerFil = 120 + int(randParams[1]%60)             // Scale base points with screen width
 	w.wallCurvature = 0.35 + float64(randParams[2]%50)/100.0 // 0.35-0.84 curvature
 	w.flowSpeed = 0.04 + float64(randParams[3]%30)/1000.0    // 0.04-0.069 speed
 	w.wallLength = 25.0 + float64(randParams[4]%20)          // 25-44 length
@@ -68,6 +69,21 @@ func (w *GreatWall) ResetParameters() {
 
 	// Initialize branch generation seeds
 	w.branchSeeds = w.RandBytes(w.pointsPerFil * w.numFilaments)
+
+	// Randomize colors
+	colorBytes := w.RandBytes(6) // Get 6 random bytes for color variation
+
+	// Galaxy color - variations of bright blue/cyan (base: 45)
+	galaxyColor := 39 + (colorBytes[0] % 7) // Range 39-45 (blue to cyan)
+	w.galaxyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", galaxyColor))).Bold(true)
+
+	// Cluster color - variations of cyan (base: 51)
+	clusterColor := 44 + (colorBytes[1] % 8) // Range 44-51 (light blue to bright cyan)
+	w.clusterStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", clusterColor)))
+
+	// Filament color - variations of deep blue (base: 33)
+	filamentColor := 27 + (colorBytes[2] % 7) // Range 27-33 (dark blue to medium blue)
+	w.filamentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", filamentColor)))
 
 	// Reset animation state
 	w.offset = 0.0
@@ -108,29 +124,52 @@ func (w *GreatWall) View() string {
 			damping := 1.0 - math.Pow(math.Abs(progress-0.5)*2, 2)*0.3
 			wave *= damping
 
-			// Create curved structure with varying height
-			y := wave * w.wallCurvature * float64(w.height/4)
+			// Create curved structure with varying height - scale more with height
+			verticalScale := math.Min(1.0, float64(w.height)/50) // Adjust scaling based on screen height
+			y := wave * w.wallCurvature * float64(w.height/3) * verticalScale
 
-			// Dynamic vertical offset with time-varying component
+			// Dynamic vertical offset with time-varying component - increased spread for taller screens
 			timeShift := math.Sin(w.offset*0.2+float64(fil)) * 0.3
-			y += filOffset*float64(w.height/6)*(1.0+timeShift) +
-				math.Sin(phase+w.offset*0.4)*float64(w.height/12)
+			heightSpread := float64(w.height) / 4 // More spread on taller screens
+			y += filOffset*heightSpread*(1.0+timeShift) +
+				math.Sin(phase+w.offset*0.4)*heightSpread*0.5
 
 			// Scale and position in screen space with improved screen utilization
 			screenX := int(float64(cx) + (x-w.wallLength/2)*float64(w.width)/20) // Scale based on screen width
-			screenY := int(float64(cy) + y*float64(w.height)/12)                 // Scale based on screen height
+			screenY := int(float64(cy) + y*math.Min(1.0, 8.0/verticalScale))     // Adjusted vertical scaling
 
-			// Draw main filament point
+			// Draw main filament point and add thickness on larger screens
 			if screenX >= 0 && screenX < w.width && screenY >= 0 && screenY < w.height {
 				// Vary the appearance based on position and screen location
 				var ch string
 				distFromCenter := math.Sqrt(math.Pow(float64(screenX-cx), 2) + math.Pow(float64(screenY-cy), 2))
 				if p%7 == 0 || distFromCenter < float64(w.height)/6 {
 					ch = w.clusterStyle.Render("*") // Galaxy clusters
+					// Add extra density around clusters on larger screens
+					if w.width > 100 {
+						for dy := -1; dy <= 1; dy++ {
+							for dx := -1; dx <= 1; dx++ {
+								if dx == 0 && dy == 0 {
+									continue
+								}
+								nx, ny := screenX+dx, screenY+dy
+								if nx >= 0 && nx < w.width && ny >= 0 && ny < w.height {
+									if screen[ny][nx] == " " { // Don't overwrite existing points
+										screen[ny][nx] = w.filamentStyle.Render("·")
+									}
+								}
+							}
+						}
+					}
 				} else if p%3 == 0 {
-					ch = w.galaxyStyle.Render(".") // Individual galaxies
+					ch = w.galaxyStyle.Render("·") // Individual galaxies
 				} else {
-					ch = w.filamentStyle.Render("·") // Filament matter
+					// Add more density to filaments on larger screens
+					if w.width > 100 && p%2 == 0 {
+						ch = w.filamentStyle.Render("*") // Denser filament points
+					} else {
+						ch = w.filamentStyle.Render("·") // Normal filament points
+					}
 				}
 				screen[screenY][screenX] = ch
 
@@ -138,17 +177,21 @@ func (w *GreatWall) View() string {
 				seedIndex := fil*w.pointsPerFil + p
 				branchProb := 0.15 + math.Sin(progress*math.Pi*2+w.offset)*0.05
 				if float64(w.branchSeeds[seedIndex])/255.0 < branchProb {
-					// Calculate branch length based on position and flow
+					// Calculate branch length based on position, flow, and screen height
 					flowStrength := math.Abs(wave) + math.Abs(math.Sin(w.offset+phase))
-					branchLen := 3.0 + math.Sin(phase*2+w.offset)*2.0 - flowStrength
+					baseBranchLen := 3.0 + math.Sin(phase*2+w.offset)*2.0 - flowStrength
+					heightScale := math.Min(2.0, float64(w.height)/40) // Scale branches with screen height
+					branchLen := baseBranchLen * heightScale
 
 					// Create two branches in opposite directions
 					for b := 1.0; b <= branchLen; b++ {
 						// Branch angle varies with position, time, and flow
 						baseAngle := math.Atan2(y-float64(cy), x-float64(cx))
+						// Wider angle spread on taller screens
+						angleSpread := math.Pi / 3 * math.Min(1.5, float64(w.height)/50)
 						branchAngle := baseAngle +
-							math.Sin(phase+w.offset*0.5)*math.Pi/3 +
-							math.Sin(w.offset*0.7+float64(fil))*math.Pi/6
+							math.Sin(phase+w.offset*0.5)*angleSpread +
+							math.Sin(w.offset*0.7+float64(fil))*angleSpread*0.5
 
 						// Calculate branch endpoints
 						dx1 := int(b * math.Cos(branchAngle))
