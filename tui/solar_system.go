@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/charmbracelet/lipgloss"
@@ -68,16 +69,6 @@ func NewSolarSystem() *SolarSystem {
 		{size: 1.2, orbitDist: 0.92, orbitSpeed: 0.006, moons: 2, hasRings: false, ptype: Ice}, // Neptune
 	}
 
-	// Initialize styles
-	s.starStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("220"))     // Yellow
-	s.rockStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("180"))     // Orange-brown
-	s.gasStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("222"))      // Light yellow
-	s.iceStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("123"))      // Light blue
-	s.moonStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))     // Light gray
-	s.ringStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))     // Dark gray
-	s.orbitStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("236"))    // Very dark gray
-	s.asteroidStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("242")) // Medium gray
-
 	return s
 }
 
@@ -90,6 +81,40 @@ func (s *SolarSystem) Tick() {
 }
 
 func (s *SolarSystem) ResetParameters() {
+	// Get random bytes for color variation
+	colorBytes := s.RandBytes(8)
+
+	// Initialize styles with random variations
+	// Star color (yellow-orange variations)
+	starBase := 220 + int(colorBytes[0]%3) - 1 // 219-222 range
+	s.starStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(fmt.Sprintf("%d", starBase)))
+
+	// Rocky planets (orange-brown with variation)
+	rockBase := 180 + int(colorBytes[1]%3) - 1 // 179-182 range
+	s.rockStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(fmt.Sprintf("%d", rockBase)))
+
+	// Gas giants (light yellow with variation)
+	gasBase := 222 + int(colorBytes[2]%3) - 1 // 221-224 range
+	s.gasStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(fmt.Sprintf("%d", gasBase)))
+
+	// Ice giants (light blue with variation)
+	iceBase := 123 + int(colorBytes[3]%3) - 1 // 122-125 range
+	s.iceStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(fmt.Sprintf("%d", iceBase)))
+
+	// Moon color (light gray)
+	moonBase := 250 + int(colorBytes[4]%3) - 1 // 249-252 range
+	s.moonStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(fmt.Sprintf("%d", moonBase)))
+
+	// Fixed styles (these look better without variation)
+	s.ringStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))     // Dark gray
+	s.orbitStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("236"))    // Very dark gray
+	s.asteroidStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("242")) // Medium gray
+
 	// Randomize number of planets within range
 	numBytes := s.RandBytes(1)
 	s.numPlanets = s.minPlanets + int(float64(numBytes[0])/255.0*float64(s.maxPlanets-s.minPlanets))
@@ -155,9 +180,10 @@ func (s *SolarSystem) ResetParameters() {
 
 		// Gas giants are more likely to have rings
 		hasRings := false
-		if ptype == Gas {
+		switch ptype {
+		case Gas:
 			hasRings = s.planetSeeds[i][3] > 0.5
-		} else if ptype == Ice {
+		case Ice:
 			hasRings = s.planetSeeds[i][3] > 0.8
 		}
 
@@ -190,7 +216,7 @@ func (s *SolarSystem) View() string {
 	// Draw orbit paths
 	for i, planet := range s.planets {
 		steps := 60
-		for step := 0; step < steps; step++ {
+		for step := range steps {
 			angle := float64(step) * 2 * math.Pi / float64(steps)
 			x := int(float64(cx) + math.Cos(angle)*planet.orbitDist*float64(s.width)*0.8)
 			y := int(float64(cy) + math.Sin(angle)*planet.orbitDist*float64(s.height)*0.7)
