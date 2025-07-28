@@ -265,7 +265,6 @@ func (g *GalaxyGroup) View() string {
 	screenArea := g.width * g.height
 	particleDensity := float64(screenArea) / 15000.0 // Adjust density for galaxy group scale
 
-	aspectRatio := float64(g.width) / float64(g.height)
 	for i, pos := range g.particlePositions {
 		// Skip some particles based on screen size to maintain consistent density
 		if float64(i) > float64(len(g.particlePositions))*particleDensity {
@@ -287,8 +286,8 @@ func (g *GalaxyGroup) View() string {
 		newRadius := math.Sqrt(dx*dx+dy*dy) * (1.0 + math.Sin(g.offset+phase)*0.1)
 
 		// Calculate screen position with orbital motion
-		screenX := int(float64(cx) + newRadius*math.Cos(newAngle)*float64(g.height)*aspectRatio*1.8)
-		screenY := int(float64(cy) + newRadius*math.Sin(newAngle)*float64(g.height)*0.9)
+		screenX := int(float64(cx) + newRadius*math.Cos(newAngle)*float64(g.width))
+		screenY := int(float64(cy) + newRadius*math.Sin(newAngle)*float64(g.height))
 
 		// Only draw if in bounds and not overlapping existing content
 		if screenX >= 0 && screenX < g.width && screenY >= 0 && screenY < g.height && screen[screenY][screenX] == " " {
