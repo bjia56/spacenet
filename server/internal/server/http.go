@@ -25,7 +25,6 @@ func NewHTTPHandler(store Store) *HTTPHandler {
 // RegisterRoutes registers all HTTP routes on the provided router
 func (h *HTTPHandler) RegisterRoutes(router *mux.Router) {
 	router.HandleFunc("/api/ip/{ip}", h.handleGetClaimByIP).Methods("GET")
-	router.HandleFunc("/api/ip/{ip}/difficulty", h.handleGetDifficulty).Methods("GET")
 	router.HandleFunc("/api/subnet/{address}/{prefix}", h.handleGetStatsBySubnet).Methods("GET")
 	router.HandleFunc("/health", h.handleHealth).Methods("GET")
 }
@@ -61,11 +60,12 @@ func (h *HTTPHandler) handleGetClaimByIP(w http.ResponseWriter, r *http.Request)
 		json.NewEncoder(w).Encode(map[string]string{"error": "No claim found for this IP"})
 		return
 	}
+	difficulty := h.store.CalculateDifficulty(ipAddr)
 
 	w.Header().Set("Content-Type", "application/json")
 	response := api.ClaimResponse{
-		IP:       ipAddr,
-		Claimant: claimant,
+		Claimant:   claimant,
+		Difficulty: difficulty,
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -96,53 +96,6 @@ func (h *HTTPHandler) handleGetStatsBySubnet(w http.ResponseWriter, r *http.Requ
 	var response *api.SubnetResponse = stats
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Error encoding JSON response: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-}
-
-// handleGetDifficulty returns the required proof of work difficulty for claiming an IP
-func (h *HTTPHandler) handleGetDifficulty(w http.ResponseWriter, r *http.Request) {
-	// Extract IP from URL variables
-	vars := mux.Vars(r)
-	ipAddr, ok := vars["ip"]
-	if !ok || ipAddr == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "IP address is required"})
-		return
-	}
-
-	// Validate the IP address
-	if net.ParseIP(ipAddr) == nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid IP address format"})
-		return
-	}
-
-	// Check if we have a ClaimStore to calculate difficulty
-	claimStore, ok := h.store.(*ClaimStore)
-	if !ok {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Store does not support difficulty calculation"})
-		return
-	}
-
-	// Calculate required difficulty
-	difficulty := claimStore.CalculateDifficulty(ipAddr)
-
-	// Check if address is currently claimed
-	claimant, claimed := h.store.GetClaim(ipAddr)
-
-	w.Header().Set("Content-Type", "application/json")
-	response := api.DifficultyResponse{
-		IP:         ipAddr,
-		Difficulty: difficulty,
-		Claimed:    claimed,
-		Claimant:   claimant,
-	}
-
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Error encoding JSON response: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)

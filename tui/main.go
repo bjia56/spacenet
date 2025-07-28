@@ -179,29 +179,6 @@ func Initialize(serverAddr string, httpPort, udpPort int, name string) *Model {
 	return m
 }
 
-// GetDifficulty queries the server for the required difficulty for an IP
-func (m *Model) GetDifficulty(ip string) (*api.DifficultyResponse, error) {
-	url := fmt.Sprintf("http://%s:%d/api/ip/%s/difficulty", m.serverAddr, m.httpPort, ip)
-
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query difficulty: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
-	}
-
-	var diffResp api.DifficultyResponse
-	if err := json.NewDecoder(resp.Body).Decode(&diffResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %v", err)
-	}
-
-	return &diffResp, nil
-}
-
 // SendClaim sends a proof of work claim for an IP
 func (m *Model) SendClaim(ip string) (string, error) {
 	// Parse the IP to ensure it's valid
@@ -210,14 +187,8 @@ func (m *Model) SendClaim(ip string) (string, error) {
 		return "", fmt.Errorf("invalid IP address: %s", ip)
 	}
 
-	// Get required difficulty from server
-	diffResp, err := m.GetDifficulty(ip)
-	if err != nil {
-		return "", fmt.Errorf("failed to get difficulty: %v", err)
-	}
-
 	// Solve proof of work (limit to 10 million attempts)
-	pow, err := api.SolveProofOfWork(targetIP, m.name, diffResp.Difficulty, 10000000)
+	pow, err := api.SolveProofOfWork(targetIP, m.name, 20, 10000000)
 	if err != nil {
 		return "", fmt.Errorf("failed to solve proof of work: %v", err)
 	}
@@ -387,7 +358,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.statusMessage = statusMessageStyle.Render(msg)
 					m.errorMessage = ""
 				} else {
-					m.errorMessage = errorMessageStyle.Render("Failed to send claim")
+					m.errorMessage = errorMessageStyle.Render("Failed to send claim: " + err.Error())
 					m.statusMessage = ""
 				}
 			}

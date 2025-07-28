@@ -27,17 +27,14 @@ func (store *ClaimStore) CalculateDifficulty(targetIP string) uint8 {
 		difficulty += claimBonus
 
 		// Calculate contiguous addresses owned by current claimant
-		contiguous := store.countContiguousAddresses(targetIP, currentClaimant)
-		if contiguous > maxContiguity {
-			contiguous = maxContiguity
-		}
+		contiguous := min(store.countContiguousAddresses(targetIP, currentClaimant), maxContiguity)
 
 		difficulty += contiguous * contiguityBonus
 	}
 
-	// Cap difficulty at reasonable maximum (28 bits = ~268 million hashes expected)
-	if difficulty > 28 {
-		difficulty = 28
+	// Cap difficulty at reasonable maximum
+	if difficulty > 20 {
+		difficulty = 20
 	}
 
 	return uint8(difficulty)

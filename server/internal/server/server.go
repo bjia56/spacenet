@@ -187,22 +187,18 @@ func (s *Server) processPackets() {
 				pow := packet.CreateProofOfWork(targetIP)
 
 				// Validate proof of work
-				if claimStore, ok := s.store.(*ClaimStore); ok {
-					if err := claimStore.ValidateProofOfWork(pow); err != nil {
-						log.Printf("Invalid proof of work from %s (%s): %v", clientIP, packet.Claimant, err)
-						continue
-					}
+				if err := s.store.ValidateProofOfWork(pow); err != nil {
+					log.Printf("Invalid proof of work from %s (%s): %v", clientIP, packet.Claimant, err)
+					continue
+				}
 
-					// Process the claim
-					err = s.store.ProcessClaim(clientIP, packet.Claimant)
-					if err != nil {
-						log.Printf("Failed to process claim from %s: %v", clientIP, err)
-					} else {
-						log.Printf("Address %s claimed by %s (nonce: %d)",
-							clientIP, packet.Claimant, packet.Nonce)
-					}
+				// Process the claim
+				err = s.store.ProcessClaim(clientIP, packet.Claimant)
+				if err != nil {
+					log.Printf("Failed to process claim from %s: %v", clientIP, err)
 				} else {
-					log.Printf("Store does not support proof of work validation")
+					log.Printf("Address %s claimed by %s (nonce: %d)",
+						clientIP, packet.Claimant, packet.Nonce)
 				}
 			}
 		}(i)
