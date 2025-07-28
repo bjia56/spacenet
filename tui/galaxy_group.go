@@ -20,12 +20,16 @@ type GalaxyGroup struct {
 	satelliteOrbits []float64   // Random orbital parameters for satellites
 	satellitePhases []float64   // Random phase shifts for satellites
 	trailLengths    []int       // Random dust trail lengths
-	streamPatterns  []float64   // Random patterns for tidal streams
+
+	// Background particle field parameters
+	particlePositions [][2]float64 // Pre-calculated particle positions
+	particlePhases    []float64    // Phase offsets for particle movement
+	particleOrbits    []float64    // Orbital parameters for particles
+	particleTypes     []byte       // Type of each particle (for visual variation)
 
 	// Visual styles
 	majorStyle     lipgloss.Style // Major galaxies
 	satelliteStyle lipgloss.Style // Satellite galaxies
-	streamStyle    lipgloss.Style // Tidal streams
 	dustStyle      lipgloss.Style // Interstellar dust
 }
 
@@ -77,7 +81,6 @@ func NewGalaxyGroup() *GalaxyGroup {
 	// Initialize styles with richer colors
 	g.majorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("159")).Bold(true) // Bright cyan-white
 	g.satelliteStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("147"))        // Light purple
-	g.streamStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("61"))            // Soft blue
 	g.dustStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("237"))             // Dark dust
 	return g
 }
@@ -167,11 +170,28 @@ func (g *GalaxyGroup) ResetParameters() {
 		g.trailLengths[i] = 3 + int(satBytes[i+g.satelliteCount*2]%4) // 3-6 length
 	}
 
-	// Initialize stream patterns
-	g.streamPatterns = make([]float64, len(g.majorGalaxies)*2)
-	streamBytes := g.RandBytes(len(g.majorGalaxies) * 2)
-	for i := range g.streamPatterns {
-		g.streamPatterns[i] = float64(streamBytes[i]) / 255.0
+	// Initialize background particle field with fixed number of particles
+	const baseParticles = 300 // Base number of particles that will scale with screen size
+	g.particlePositions = make([][2]float64, baseParticles)
+	g.particlePhases = make([]float64, baseParticles)
+	g.particleOrbits = make([]float64, baseParticles)
+	g.particleTypes = make([]byte, baseParticles)
+
+	// Get random bytes for particle initialization
+	particleBytes := g.RandBytes(baseParticles * 4) // 4 bytes per particle (x, y, orbit, type)
+	for i := 0; i < baseParticles; i++ {
+		// Convert to polar coordinates for better orbital distribution
+		angle := float64(particleBytes[i*4]) / 255.0 * math.Pi * 2
+		radius := 0.1 + float64(particleBytes[i*4+1])/255.0*0.9 // Radial distribution
+
+		// Store in normalized cartesian coordinates
+		g.particlePositions[i][0] = 0.5 + math.Cos(angle)*radius*0.5
+		g.particlePositions[i][1] = 0.5 + math.Sin(angle)*radius*0.5
+
+		// Phase and orbit parameters
+		g.particlePhases[i] = float64(particleBytes[i*4+2]) / 255.0 * math.Pi * 2
+		g.particleOrbits[i] = 0.5 + float64(particleBytes[i*4+3])/255.0 // Orbit speed multiplier
+		g.particleTypes[i] = particleBytes[i*4+3]
 	}
 
 	// Reset animation state
@@ -188,6 +208,54 @@ func (g *GalaxyGroup) View() string {
 	}
 
 	cx, cy := g.width/2, g.height/2
+
+	// Draw background particle field
+	screenArea := g.width * g.height
+	particleDensity := float64(screenArea) / 15000.0 // Adjust density for galaxy group scale
+
+	aspectRatio := float64(g.width) / float64(g.height)
+	for i, pos := range g.particlePositions {
+		// Skip some particles based on screen size to maintain consistent density
+		if float64(i) > float64(len(g.particlePositions))*particleDensity {
+			break
+		}
+
+		// Calculate radial distance from center
+		dx := pos[0] - 0.5
+		dy := pos[1] - 0.5
+		distFromCenter := math.Sqrt(dx*dx+dy*dy) * 2.0
+
+		// Calculate orbital motion
+		phase := g.particlePhases[i]
+		orbitSpeed := g.particleOrbits[i] * g.orbitSpeed
+
+		// More complex orbital motion
+		baseAngle := math.Atan2(dy, dx)
+		newAngle := baseAngle + orbitSpeed*(1.0-distFromCenter*0.3) // Faster orbits near center
+		newRadius := math.Sqrt(dx*dx+dy*dy) * (1.0 + math.Sin(g.offset+phase)*0.1)
+
+		// Calculate screen position with orbital motion
+		screenX := int(float64(cx) + newRadius*math.Cos(newAngle)*float64(g.height)*aspectRatio*1.8)
+		screenY := int(float64(cy) + newRadius*math.Sin(newAngle)*float64(g.height)*0.9)
+
+		// Only draw if in bounds and not overlapping existing content
+		if screenX >= 0 && screenX < g.width && screenY >= 0 && screenY < g.height && screen[screenY][screenX] == " " {
+			particleType := g.particleTypes[i]
+
+			var ch string
+			if distFromCenter < 0.3 && particleType%5 == 0 {
+				// Particles in the dense central region
+				ch = g.majorStyle.Render("·")
+			} else if particleType%7 == 0 {
+				// Occasional brighter particles
+				ch = g.satelliteStyle.Render("*")
+			} else {
+				// Background dust
+				ch = g.dustStyle.Render("·")
+			}
+			screen[screenY][screenX] = ch
+		}
+	}
 
 	// Update and draw major galaxies
 	for i := range g.majorGalaxies {
@@ -241,52 +309,6 @@ func (g *GalaxyGroup) View() string {
 						screen[y][x] = g.majorStyle.Render("*") // Inner arms
 					} else {
 						screen[y][x] = g.majorStyle.Render("·") // Outer regions
-					}
-				}
-			}
-		}
-
-		// Draw tidal streams between major galaxies
-		if i > 0 {
-			prev := g.majorGalaxies[i-1]
-			steps := 15
-
-			// Calculate interaction strength based on galaxy sizes and distances
-			dx, dy := galaxy.x-prev.x, galaxy.y-prev.y
-			dist := math.Sqrt(dx*dx + dy*dy)
-			interaction := g.interactStrength * (galaxy.size + prev.size) / (dist + 1)
-
-			for s := 0; s < steps; s++ {
-				progress := float64(s) / float64(steps)
-
-				// Use stored patterns for stream variation
-				pattern1 := g.streamPatterns[i*2]
-				pattern2 := g.streamPatterns[i*2+1]
-
-				// Complex wave pattern with deterministic variation
-				wave1 := math.Sin(progress*math.Pi*(1.8+pattern1)+g.offset) * float64(g.height/8)
-				wave2 := math.Cos(progress*math.Pi*(2.5+pattern2)+g.offset*0.7) * float64(g.height/12)
-				finalWave := (wave1 + wave2) * interaction
-
-				// Calculate stream position with gravitational curvature
-				x := int(prev.x + (galaxy.x-prev.x)*progress)
-				y := int(prev.y + (galaxy.y-prev.y)*progress + finalWave)
-
-				// Draw wider streams near galaxies
-				streamWidth := int(2 * (1 - math.Abs(progress-0.5)))
-
-				for w := -streamWidth; w <= streamWidth; w++ {
-					drawX := x + w
-					drawY := y + w/2
-
-					if drawX >= 0 && drawX < g.width && drawY >= 0 && drawY < g.height {
-						if screen[drawY][drawX] == " " {
-							if math.Abs(float64(w)) < float64(streamWidth)/2 {
-								screen[drawY][drawX] = g.streamStyle.Render("∙")
-							} else {
-								screen[drawY][drawX] = g.dustStyle.Render("·")
-							}
-						}
 					}
 				}
 			}
