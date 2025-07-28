@@ -76,7 +76,7 @@ func (w *GreatWall) ResetParameters() {
 
 	// Initialize background particle field with fixed number of particles
 	// We'll scale their visibility in View based on screen size
-	const baseParticles = 100 // Base number of particles that will scale with screen size
+	const baseParticles = 400 // Increased base number of particles
 	w.particlePositions = make([][2]float64, baseParticles)
 	w.particlePhases = make([]float64, baseParticles)
 	particleBytes := w.RandBytes(baseParticles * 3) // 3 bytes per particle (x, y, phase)
@@ -121,7 +121,7 @@ func (w *GreatWall) View() string {
 
 	// Draw background particle field
 	screenArea := w.width * w.height
-	particleDensity := float64(screenArea) / 20000.0 // Adjust this factor to control density
+	particleDensity := float64(screenArea) / 10000.0 // Increased density (smaller divisor = more particles)
 
 	for i, pos := range w.particlePositions {
 		// Skip some particles based on screen size to maintain consistent density
@@ -142,7 +142,7 @@ func (w *GreatWall) View() string {
 			// Vary particle brightness based on position and time
 			brightness := math.Sin(w.offset*0.1+phase)*0.3 + 0.7
 			if brightness > 0.8 {
-				screen[screenY][screenX] = w.filamentStyle.Render(".")
+				screen[screenY][screenX] = w.clusterStyle.Render("*")
 			} else {
 				screen[screenY][screenX] = w.filamentStyle.Render("·")
 			}

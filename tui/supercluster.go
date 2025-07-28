@@ -80,7 +80,7 @@ func (l *Supercluster) ResetParameters() {
 	l.flowSeeds = l.RandBytes(l.pointsPerArm * l.numArms)
 
 	// Initialize background particle field with fixed number of particles
-	const baseParticles = 200 // Base number of particles that will scale with screen size
+	const baseParticles = 300 // Base number of particles that will scale with screen size
 	l.particlePositions = make([][2]float64, baseParticles)
 	l.particlePhases = make([]float64, baseParticles)
 	l.particleTypes = make([]byte, baseParticles)
@@ -133,7 +133,7 @@ func (l *Supercluster) View() string {
 
 	// Draw background particle field
 	screenArea := l.width * l.height
-	particleDensity := float64(screenArea) / 25000.0 // Slightly sparser than GreatWall
+	particleDensity := float64(screenArea) / 15000.0
 
 	for i, pos := range l.particlePositions {
 		// Skip some particles based on screen size to maintain consistent density
