@@ -22,6 +22,11 @@ type Supercluster struct {
 	flowSeeds      []byte    // Random seeds for flow patterns
 	clusterSizes   []float64 // Size variation for clusters
 
+	// Background particle field parameters
+	particlePositions [][2]float64 // Pre-calculated particle positions
+	particlePhases    []float64    // Phase offsets for particle movement
+	particleTypes     []byte       // Type of each particle (for visual variation)
+
 	// Visual styles
 	galaxyStyle    lipgloss.Style // Individual galaxies
 	clusterStyle   lipgloss.Style // Dense galaxy clusters
@@ -74,6 +79,23 @@ func (l *Supercluster) ResetParameters() {
 	// Initialize flow pattern seeds
 	l.flowSeeds = l.RandBytes(l.pointsPerArm * l.numArms)
 
+	// Initialize background particle field with fixed number of particles
+	const baseParticles = 200 // Base number of particles that will scale with screen size
+	l.particlePositions = make([][2]float64, baseParticles)
+	l.particlePhases = make([]float64, baseParticles)
+	l.particleTypes = make([]byte, baseParticles)
+
+	// Get random bytes for particle initialization
+	particleBytes := l.RandBytes(baseParticles * 4) // 4 bytes per particle (x, y, phase, type)
+
+	for i := range baseParticles {
+		// Convert random bytes to normalized coordinates and parameters
+		l.particlePositions[i][0] = float64(particleBytes[i*4]) / 255.0
+		l.particlePositions[i][1] = float64(particleBytes[i*4+1]) / 255.0
+		l.particlePhases[i] = float64(particleBytes[i*4+2]) / 255.0 * math.Pi * 2
+		l.particleTypes[i] = particleBytes[i*4+3]
+	}
+
 	// Randomize colors while maintaining cosmic theme
 	colorBytes := l.RandBytes(4)
 
@@ -108,6 +130,55 @@ func (l *Supercluster) View() string {
 	}
 
 	cx, cy := l.width/2, l.height/2
+
+	// Draw background particle field
+	screenArea := l.width * l.height
+	particleDensity := float64(screenArea) / 25000.0 // Slightly sparser than GreatWall
+
+	for i, pos := range l.particlePositions {
+		// Skip some particles based on screen size to maintain consistent density
+		if float64(i) > float64(len(l.particlePositions))*particleDensity {
+			break
+		}
+
+		// Calculate radial distance from center (0.0 to 1.0)
+		dx := pos[0] - 0.5
+		dy := pos[1] - 0.5
+		distFromCenter := math.Sqrt(dx*dx+dy*dy) * 2.0 // Normalized to 0.0-1.0
+
+		// More movement near the center (influenced by Great Attractor)
+		phase := l.particlePhases[i]
+		moveScale := math.Max(0.2, 1.0-distFromCenter) // Stronger movement near center
+		moveX := math.Sin(l.offset*0.2+phase) * 2.0 * moveScale
+		moveY := math.Cos(l.offset*0.3+phase) * 2.0 * moveScale
+
+		// Add slight inward spiral motion
+		angle := math.Atan2(dy, dx)
+		spiralSpeed := (1.0 - distFromCenter) * 0.5
+		moveX += math.Cos(angle+l.offset) * spiralSpeed
+		moveY += math.Sin(angle+l.offset) * spiralSpeed
+
+		screenX := int(pos[0]*float64(l.width) + moveX)
+		screenY := int(pos[1]*float64(l.height) + moveY)
+
+		// Only draw if in bounds and not overlapping existing content
+		if screenX >= 0 && screenX < l.width && screenY >= 0 && screenY < l.height && screen[screenY][screenX] == " " {
+			// Vary particle appearance based on type and position
+			particleType := l.particleTypes[i]
+			brightness := math.Sin(l.offset*0.1+phase)*0.3 + 0.7
+
+			var ch string
+			if distFromCenter < 0.3 && particleType%5 == 0 {
+				// Near the Great Attractor, some particles are more energetic
+				ch = l.galaxyStyle.Render("*")
+			} else if brightness > 0.8 && particleType%3 == 0 {
+				ch = l.galaxyStyle.Render("·")
+			} else {
+				ch = l.filamentStyle.Render("·")
+			}
+			screen[screenY][screenX] = ch
+		}
+	}
 
 	// Draw the Great Attractor
 	gaSize := 2
