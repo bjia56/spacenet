@@ -114,29 +114,6 @@ func TestClaimPacket_SerializeAndParse(t *testing.T) {
 	}
 }
 
-func TestIsLegacyPacket(t *testing.T) {
-	// Test legacy packet (plain text)
-	legacyData := []byte("alice")
-	if !api.IsLegacyPacket(legacyData) {
-		t.Error("Plain text packet should be detected as legacy")
-	}
-
-	// Test new packet format
-	newPacket := &api.ClaimPacket{
-		Difficulty: 12,
-		Nonce:      123456789,
-		Claimant:   "alice",
-	}
-
-	newData, err := newPacket.Serialize()
-	if err != nil {
-		t.Fatalf("Failed to serialize new packet: %v", err)
-	}
-
-	if api.IsLegacyPacket(newData) {
-		t.Error("New packet format should not be detected as legacy")
-	}
-}
 
 func TestValidateProofOfWork(t *testing.T) {
 	store := NewClaimStore()

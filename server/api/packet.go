@@ -96,20 +96,3 @@ func (cp *ClaimPacket) CreateProofOfWork(targetIP net.IP) *ProofOfWork {
 	}
 }
 
-// IsLegacyPacket checks if the packet data is in the old format (plain text claimant name)
-func IsLegacyPacket(data []byte) bool {
-	// Legacy packets are plain text, so they shouldn't start with a high difficulty value
-	// New packets will have difficulty in range 8-28 typically
-	if len(data) == 0 {
-		return false
-	}
-	
-	// If first byte is a reasonable difficulty value and packet is at least 9 bytes,
-	// it's likely a new packet format
-	if data[0] >= 8 && data[0] <= 28 && len(data) >= 9 {
-		return false
-	}
-	
-	// Otherwise, treat as legacy
-	return true
-}

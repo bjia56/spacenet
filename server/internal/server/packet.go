@@ -11,5 +11,4 @@ type ProofOfWork = api.ProofOfWork
 // Function aliases for compatibility
 var (
 	ParseClaimPacket = api.ParseClaimPacket
-	IsLegacyPacket   = api.IsLegacyPacket
 )
