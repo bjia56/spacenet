@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/charmbracelet/lipgloss"
@@ -93,6 +94,25 @@ func (s *Supercluster) ResetParameters() {
 		s.branchPatterns[i] = float64(branchBytes[i]) / 255.0      // 0.0-1.0
 		s.turbulenceSeeds[i] = float64(turbBytes[i]) / 255.0 * 0.2 // 0.0-0.2
 	}
+
+	// Randomize colors
+	colorBytes := s.RandBytes(8)
+
+	// Galaxy colors - variations of bright blue-cyan (base: 51)
+	galaxyColor := 45 + (colorBytes[0] % 7) // Range 45-51 (bright blue to cyan)
+	s.galaxyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", galaxyColor))).Bold(true)
+
+	// Cluster colors - variations of light cyan (base: 159)
+	clusterColor := 153 + (colorBytes[1] % 7) // Range 153-159 (cyan variations)
+	s.clusterStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", clusterColor))).Bold(true)
+
+	// Attractor colors - variations of magenta-red (base: 201)
+	attractorColor := 196 + (colorBytes[2] % 6) // Range 196-201 (red to magenta)
+	s.attractorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", attractorColor))).Bold(true)
+
+	// Flow colors - variations of dark blue (base: 17)
+	flowColor := 17 + (colorBytes[3] % 6) // Range 17-22 (dark blue variations)
+	s.flowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", flowColor)))
 }
 
 func (s *Supercluster) View() string {
