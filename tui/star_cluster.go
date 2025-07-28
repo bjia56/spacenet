@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/charmbracelet/lipgloss"
@@ -26,6 +27,19 @@ type StarCluster struct {
 	whiteStyle  lipgloss.Style // White stars
 	yellowStyle lipgloss.Style // Yellow stars
 	redStyle    lipgloss.Style // Red stars
+
+	// Background particle styles (more subdued versions)
+	particleBlueStyle   lipgloss.Style // Dim blue particles
+	particleWhiteStyle  lipgloss.Style // Dim white particles
+	particleYellowStyle lipgloss.Style // Dim yellow particles
+	particleRedStyle    lipgloss.Style // Dim red particles
+
+	// Background particle field parameters
+	particlePositions [][2]float64     // Normalized positions (0-1)
+	particlePhases    []float64        // Phase offsets for particle movement
+	particleOrbits    []float64        // Orbital parameters for particles
+	particleTypes     []byte           // Type of each particle (for visual variation)
+	particleColors    []lipgloss.Style // Individual particle colors
 }
 
 func NewStarCluster() *StarCluster {
@@ -34,12 +48,6 @@ func NewStarCluster() *StarCluster {
 		centerStars:   7,  // Prominent central stars
 		offset:        0.0,
 		rotationSpeed: 0.02,
-
-		// Initialize styles for different stellar types
-		blueStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("51")).Bold(true),  // Bright blue
-		whiteStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Bold(true),  // Bright white
-		yellowStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("220")).Bold(true), // Golden yellow
-		redStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true), // Bright red
 	}
 	j.DefaultAnimation = NewDefaultAnimation(j)
 	return j
@@ -52,11 +60,43 @@ func (j *StarCluster) Tick() {
 func (j *StarCluster) ResetParameters() {
 	// Get random bytes for initialization
 	randParams := j.RandBytes(8)
+	colorParams := j.RandBytes(8) // Additional random bytes for color variation
 
 	// Adjust parameters with some randomness
 	j.numStars = 35 + int(randParams[0]%15)  // 35-49 stars
 	j.centerStars = 6 + int(randParams[1]%3) // 6-8 central stars
 	j.rotationSpeed = 0.02 + float64(randParams[2]%20)/1000.0
+
+	// Initialize color styles with random variations
+	// Star colors (bright and bold)
+	blueBase := 51 + int(colorParams[0]%3) - 1    // 50-53 range
+	whiteBase := 15 + int(colorParams[1]%3) - 1   // 14-17 range
+	yellowBase := 220 + int(colorParams[2]%3) - 1 // 219-222 range
+	redBase := 196 + int(colorParams[3]%3) - 1    // 195-198 range
+
+	j.blueStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(fmt.Sprintf("%d", blueBase))).Bold(true)
+	j.whiteStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(fmt.Sprintf("%d", whiteBase))).Bold(true)
+	j.yellowStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(fmt.Sprintf("%d", yellowBase))).Bold(true)
+	j.redStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(fmt.Sprintf("%d", redBase))).Bold(true)
+
+	// Background particle colors (subdued, not bold)
+	particleBlueBase := 17 + int(colorParams[4]%3) - 1    // 16-19 range
+	particleWhiteBase := 242 + int(colorParams[5]%3) - 1  // 241-244 range
+	particleYellowBase := 136 + int(colorParams[6]%3) - 1 // 135-138 range
+	particleRedBase := 131 + int(colorParams[7]%3) - 1    // 130-133 range
+
+	j.particleBlueStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(fmt.Sprintf("%d", particleBlueBase)))
+	j.particleWhiteStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(fmt.Sprintf("%d", particleWhiteBase)))
+	j.particleYellowStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(fmt.Sprintf("%d", particleYellowBase)))
+	j.particleRedStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(fmt.Sprintf("%d", particleRedBase)))
 
 	// Initialize star parameters
 	j.starPositions = make([][2]float64, j.numStars)
@@ -135,6 +175,44 @@ func (j *StarCluster) ResetParameters() {
 	}
 
 	j.offset = 0.0
+
+	// Initialize background particle field with fixed number of particles
+	const baseParticles = 240 // Base number of particles for star cluster background
+	j.particlePositions = make([][2]float64, baseParticles)
+	j.particlePhases = make([]float64, baseParticles)
+	j.particleOrbits = make([]float64, baseParticles)
+	j.particleTypes = make([]byte, baseParticles)
+	j.particleColors = make([]lipgloss.Style, baseParticles)
+
+	// Get random bytes for particle initialization
+	particleBytes := j.RandBytes(baseParticles * 5) // 5 bytes per particle (x, y, orbit, type, color)
+	for i := 0; i < baseParticles; i++ {
+		// Convert to polar coordinates for better distribution
+		angle := float64(particleBytes[i*5]) / 255.0 * math.Pi * 2
+		radius := 0.1 + float64(particleBytes[i*5+1])/255.0*0.9 // Radial distribution
+
+		// Store in normalized coordinates (0-1 range)
+		j.particlePositions[i][0] = 0.5 + math.Cos(angle)*radius*0.5
+		j.particlePositions[i][1] = 0.5 + math.Sin(angle)*radius*0.5
+
+		// Phase and orbit parameters
+		j.particlePhases[i] = float64(particleBytes[i*5+2]) / 255.0 * math.Pi * 2
+		j.particleOrbits[i] = 0.3 + float64(particleBytes[i*5+3])/255.0*0.7 // 0.3-1.0 range
+
+		// Assign particle colors based on position and random variation
+		colorRoll := particleBytes[i*5+4] % 8
+		switch colorRoll {
+		case 0:
+			j.particleColors[i] = j.particleBlueStyle
+		case 1, 2:
+			j.particleColors[i] = j.particleWhiteStyle
+		case 3, 4, 5:
+			j.particleColors[i] = j.particleYellowStyle
+		default:
+			j.particleColors[i] = j.particleRedStyle
+		}
+		j.particleTypes[i] = particleBytes[i*5+4]
+	}
 }
 
 func (j *StarCluster) View() string {
@@ -149,6 +227,53 @@ func (j *StarCluster) View() string {
 
 	// Calculate center of screen
 	cx, cy := j.width/2, j.height/2
+
+	// Draw background particle field
+	screenArea := j.width * j.height
+	particleDensity := float64(screenArea) / 12000.0 // Adjust density for star cluster scale
+
+	for i, pos := range j.particlePositions {
+		// Skip some particles based on screen size to maintain consistent density
+		if float64(i) > float64(len(j.particlePositions))*particleDensity {
+			break
+		}
+
+		// Calculate radial distance from center
+		dx := pos[0] - 0.5
+		dy := pos[1] - 0.5
+		distFromCenter := math.Sqrt(dx*dx+dy*dy) * 2.0
+
+		// Calculate orbital motion
+		phase := j.particlePhases[i]
+		orbitSpeed := j.particleOrbits[i] * j.rotationSpeed * 0.3
+
+		// Complex orbital motion
+		baseAngle := math.Atan2(dy, dx)
+		newAngle := baseAngle + orbitSpeed*(1.0-distFromCenter*0.4) // Faster orbits near center
+		newRadius := math.Sqrt(dx*dx+dy*dy) * (1.0 + math.Sin(j.offset*0.5+phase)*0.15)
+
+		// Calculate screen position with aspect ratio correction
+		screenX := int(float64(cx) + newRadius*math.Cos(newAngle)*float64(j.width))
+		screenY := int(float64(cy) + newRadius*math.Sin(newAngle)*float64(j.height))
+
+		// Only draw if in bounds and not overlapping
+		if screenX >= 0 && screenX < j.width && screenY >= 0 && screenY < j.height && screen[screenY][screenX] == " " {
+			particleType := j.particleTypes[i]
+			var ch string
+
+			if distFromCenter < 0.3 && particleType%5 == 0 {
+				// Dense central region particles
+				ch = j.particleColors[i].Render("·")
+			} else if particleType%7 == 0 {
+				// Occasional brighter particles
+				ch = j.particleColors[i].Render("*")
+			} else {
+				// Background particles
+				ch = j.particleColors[i].Render("∙")
+			}
+			screen[screenY][screenX] = ch
+		}
+	}
 
 	// Draw all stars
 	for i := 0; i < j.numStars; i++ {
