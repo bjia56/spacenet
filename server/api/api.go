@@ -12,3 +12,11 @@ type SubnetResponse struct {
 	Owner      string  `json:"owner,omitempty"`
 	Percentage float64 `json:"percentage,omitempty"`
 }
+
+// DifficultyResponse represents the JSON response for proof of work difficulty
+type DifficultyResponse struct {
+	IP         string `json:"ip"`
+	Difficulty uint8  `json:"difficulty"`
+	Claimed    bool   `json:"claimed"`
+	Claimant   string `json:"claimant,omitempty"`
+}
