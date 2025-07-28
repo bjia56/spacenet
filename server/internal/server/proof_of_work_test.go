@@ -3,11 +3,13 @@ package server
 import (
 	"net"
 	"testing"
+
+	"github.com/bjia56/spacenet/server/api"
 )
 
 func TestProofOfWork_IsValid(t *testing.T) {
 	// Test case: known valid proof of work
-	pow := &ProofOfWork{
+	pow := &api.ProofOfWork{
 		Target:     net.ParseIP("2001:db8::1"),
 		Claimant:   "alice",
 		Nonce:      12345,
@@ -15,7 +17,7 @@ func TestProofOfWork_IsValid(t *testing.T) {
 	}
 
 	// Find a valid nonce for this difficulty
-	validPow, err := SolveProofOfWork(pow.Target, pow.Claimant, pow.Difficulty, 1000000)
+	validPow, err := api.SolveProofOfWork(pow.Target, pow.Claimant, pow.Difficulty, 1000000)
 	if err != nil {
 		t.Fatalf("Failed to solve proof of work: %v", err)
 	}
@@ -25,7 +27,7 @@ func TestProofOfWork_IsValid(t *testing.T) {
 	}
 
 	// Test invalid proof of work (wrong nonce)
-	invalidPow := &ProofOfWork{
+	invalidPow := &api.ProofOfWork{
 		Target:     validPow.Target,
 		Claimant:   validPow.Claimant,
 		Nonce:      validPow.Nonce + 1, // Wrong nonce
@@ -80,7 +82,7 @@ func TestCalculateDifficulty(t *testing.T) {
 }
 
 func TestClaimPacket_SerializeAndParse(t *testing.T) {
-	original := &ClaimPacket{
+	original := &api.ClaimPacket{
 		Difficulty: 12,
 		Nonce:      123456789,
 		Claimant:   "alice",
@@ -93,7 +95,7 @@ func TestClaimPacket_SerializeAndParse(t *testing.T) {
 	}
 
 	// Parse back
-	parsed, err := ParseClaimPacket(data)
+	parsed, err := api.ParseClaimPacket(data)
 	if err != nil {
 		t.Fatalf("Failed to parse packet: %v", err)
 	}
@@ -115,12 +117,12 @@ func TestClaimPacket_SerializeAndParse(t *testing.T) {
 func TestIsLegacyPacket(t *testing.T) {
 	// Test legacy packet (plain text)
 	legacyData := []byte("alice")
-	if !IsLegacyPacket(legacyData) {
+	if !api.IsLegacyPacket(legacyData) {
 		t.Error("Plain text packet should be detected as legacy")
 	}
 
 	// Test new packet format
-	newPacket := &ClaimPacket{
+	newPacket := &api.ClaimPacket{
 		Difficulty: 12,
 		Nonce:      123456789,
 		Claimant:   "alice",
@@ -131,7 +133,7 @@ func TestIsLegacyPacket(t *testing.T) {
 		t.Fatalf("Failed to serialize new packet: %v", err)
 	}
 
-	if IsLegacyPacket(newData) {
+	if api.IsLegacyPacket(newData) {
 		t.Error("New packet format should not be detected as legacy")
 	}
 }
@@ -142,7 +144,7 @@ func TestValidateProofOfWork(t *testing.T) {
 
 	// Create a valid proof of work
 	requiredDifficulty := store.CalculateDifficulty(target.String())
-	validPow, err := SolveProofOfWork(target, "alice", requiredDifficulty, 1000000)
+	validPow, err := api.SolveProofOfWork(target, "alice", requiredDifficulty, 1000000)
 	if err != nil {
 		t.Fatalf("Failed to solve proof of work: %v", err)
 	}
@@ -153,7 +155,7 @@ func TestValidateProofOfWork(t *testing.T) {
 	}
 
 	// Test with insufficient difficulty
-	invalidPow := &ProofOfWork{
+	invalidPow := &api.ProofOfWork{
 		Target:     target,
 		Claimant:   "alice",
 		Nonce:      validPow.Nonce,
