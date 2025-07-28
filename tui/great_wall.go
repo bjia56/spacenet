@@ -21,6 +21,10 @@ type GreatWall struct {
 	filamentOffsets []float64 // Random offset for each filament
 	branchSeeds     []byte    // Random seeds for branch generation
 
+	// Background particle field parameters
+	particlePositions [][2]float64 // Pre-calculated particle positions
+	particlePhases    []float64    // Phase offsets for particle movement
+
 	// Visual styles for different parts of the wall
 	galaxyStyle   lipgloss.Style // Individual galaxy points
 	clusterStyle  lipgloss.Style // Dense galaxy clusters
@@ -70,6 +74,20 @@ func (w *GreatWall) ResetParameters() {
 	// Initialize branch generation seeds
 	w.branchSeeds = w.RandBytes(w.pointsPerFil * w.numFilaments)
 
+	// Initialize background particle field with fixed number of particles
+	// We'll scale their visibility in View based on screen size
+	const baseParticles = 100 // Base number of particles that will scale with screen size
+	w.particlePositions = make([][2]float64, baseParticles)
+	w.particlePhases = make([]float64, baseParticles)
+	particleBytes := w.RandBytes(baseParticles * 3) // 3 bytes per particle (x, y, phase)
+
+	for i := range baseParticles {
+		// Convert random bytes to normalized coordinates and phase
+		w.particlePositions[i][0] = float64(particleBytes[i*3]) / 255.0
+		w.particlePositions[i][1] = float64(particleBytes[i*3+1]) / 255.0
+		w.particlePhases[i] = float64(particleBytes[i*3+2]) / 255.0 * math.Pi * 2
+	}
+
 	// Randomize colors
 	colorBytes := w.RandBytes(6) // Get 6 random bytes for color variation
 
@@ -100,6 +118,36 @@ func (w *GreatWall) View() string {
 	}
 
 	cx, cy := w.width/2, w.height/2
+
+	// Draw background particle field
+	screenArea := w.width * w.height
+	particleDensity := float64(screenArea) / 20000.0 // Adjust this factor to control density
+
+	for i, pos := range w.particlePositions {
+		// Skip some particles based on screen size to maintain consistent density
+		if float64(i) > float64(len(w.particlePositions))*particleDensity {
+			break
+		}
+
+		// Calculate screen position with slight movement
+		phase := w.particlePhases[i]
+		moveX := math.Sin(w.offset*0.2+phase) * 2.0
+		moveY := math.Cos(w.offset*0.3+phase) * 2.0
+
+		screenX := int(pos[0]*float64(w.width) + moveX)
+		screenY := int(pos[1]*float64(w.height) + moveY)
+
+		// Only draw if in bounds and not overlapping existing content
+		if screenX >= 0 && screenX < w.width && screenY >= 0 && screenY < w.height && screen[screenY][screenX] == " " {
+			// Vary particle brightness based on position and time
+			brightness := math.Sin(w.offset*0.1+phase)*0.3 + 0.7
+			if brightness > 0.8 {
+				screen[screenY][screenX] = w.filamentStyle.Render(".")
+			} else {
+				screen[screenY][screenX] = w.filamentStyle.Render("·")
+			}
+		}
+	}
 
 	// Draw multiple filaments that form the wall
 	for fil := 0; fil < w.numFilaments; fil++ {
@@ -164,8 +212,10 @@ func (w *GreatWall) View() string {
 				} else if p%3 == 0 {
 					ch = w.galaxyStyle.Render("·") // Individual galaxies
 				} else {
-					// Add more density to filaments on larger screens
-					if w.width > 100 && p%2 == 0 {
+					// Calculate density based on screen size and curvature
+					curveIntensity := math.Abs(wave) * w.wallCurvature
+					densityThreshold := float64(w.width) / 200.0 * (1.0 + curveIntensity)
+					if densityThreshold > 1.0 && p%2 == 0 {
 						ch = w.filamentStyle.Render("*") // Denser filament points
 					} else {
 						ch = w.filamentStyle.Render("·") // Normal filament points
@@ -185,10 +235,18 @@ func (w *GreatWall) View() string {
 
 					// Create two branches in opposite directions
 					for b := 1.0; b <= branchLen; b++ {
-						// Branch angle varies with position, time, and flow
-						baseAngle := math.Atan2(y-float64(cy), x-float64(cx))
-						// Wider angle spread on taller screens
-						angleSpread := math.Pi / 3 * math.Min(1.5, float64(w.height)/50)
+						// Calculate tangent direction based on wave derivatives
+						dx := 1.0 // Base horizontal movement
+						dy := wave*w.wallCurvature*verticalScale*math.Cos(x*0.5+w.offset+phase)*0.6 +
+							wave*w.wallCurvature*verticalScale*math.Cos(x*0.25+w.offset*1.5)*0.3 +
+							wave*w.wallCurvature*verticalScale*math.Cos(x*0.75+w.offset*0.7)*0.1
+
+						// Calculate base angle from tangent direction
+						baseAngle := math.Atan2(dy, dx)
+
+						// Wider angle spread on taller screens, scaled by curvature
+						curveIntensity := math.Min(1.0, math.Abs(dy)/5.0) // How sharply the filament is curving
+						angleSpread := math.Pi / 3 * math.Min(1.5, float64(w.height)/50) * (1.0 - curveIntensity*0.5)
 						branchAngle := baseAngle +
 							math.Sin(phase+w.offset*0.5)*angleSpread +
 							math.Sin(w.offset*0.7+float64(fil))*angleSpread*0.5
