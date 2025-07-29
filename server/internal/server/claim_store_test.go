@@ -1,12 +1,9 @@
 package server
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
-
-	"github.com/redis/go-redis/v9"
 )
 
 func TestNewClaimStore(t *testing.T) {
@@ -251,73 +248,112 @@ func TestClaimStore_ConcurrentAccess(t *testing.T) {
 	}
 }
 
-// MockRedisClient for testing Redis functionality
-type MockRedisClient struct {
-	data map[string]string
-	pingError error
-	getError error
-	setError error
-	scanKeys []string
-	scanError error
-}
+func TestClaimStore_WithRedisClient_BasicOperations(t *testing.T) {
+	mock := NewMockRedisClient()
+	store := NewClaimStoreWithRedisClient(mock)
 
-func NewMockRedisClient() *MockRedisClient {
-	return &MockRedisClient{
-		data: make(map[string]string),
+	// Test basic claim processing
+	err := store.ProcessClaim("192.168.1.1", "alice")
+	if err != nil {
+		t.Fatalf("ProcessClaim failed: %v", err)
+	}
+
+	// Verify claim was stored in memory
+	claimant, exists := store.GetClaim("192.168.1.1")
+	if !exists {
+		t.Error("Claim should exist in memory")
+	}
+	if claimant != "alice" {
+		t.Errorf("Expected claimant 'alice', got '%s'", claimant)
+	}
+
+	// Verify Redis operations were called
+	if !mock.HasCall("Set:192.168.1.1:alice") {
+		t.Error("Expected Set call to Redis")
+	}
+
+	// Verify data was stored in mock Redis
+	data := mock.GetData()
+	if data["192.168.1.1"] != "alice" {
+		t.Error("Data should be stored in mock Redis")
 	}
 }
 
-func (m *MockRedisClient) Ping(ctx context.Context) *redis.StatusCmd {
-	cmd := redis.NewStatusCmd(ctx)
-	if m.pingError != nil {
-		cmd.SetErr(m.pingError)
-	} else {
-		cmd.SetVal("PONG")
+func TestClaimStore_WithRedisClient_ErrorHandling(t *testing.T) {
+	mock := NewMockRedisClient()
+	
+	// Set an error for Set operations
+	mock.SetSetError(fmt.Errorf("Redis connection failed"))
+	
+	store := NewClaimStoreWithRedisClient(mock)
+
+	// Try to process a claim - should fail due to Redis error
+	err := store.ProcessClaim("192.168.1.1", "alice")
+	if err == nil {
+		t.Error("Expected error due to Redis failure")
 	}
-	return cmd
-}
 
-func (m *MockRedisClient) Get(ctx context.Context, key string) *redis.StringCmd {
-	cmd := redis.NewStringCmd(ctx, "get", key)
-	if m.getError != nil {
-		cmd.SetErr(m.getError)
-	} else if val, exists := m.data[key]; exists {
-		cmd.SetVal(val)
-	} else {
-		cmd.SetErr(redis.Nil)
+	// Verify claim was NOT stored in memory due to Redis failure
+	_, exists := store.GetClaim("192.168.1.1")
+	if exists {
+		t.Error("Claim should not exist in memory when Redis fails")
 	}
-	return cmd
 }
 
-func (m *MockRedisClient) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd {
-	cmd := redis.NewStatusCmd(ctx, "set", key, value)
-	if m.setError != nil {
-		cmd.SetErr(m.setError)
-	} else {
-		m.data[key] = fmt.Sprintf("%v", value)
-		cmd.SetVal("OK")
+func TestClaimStore_WithRedisClient_LoadFromRedis(t *testing.T) {
+	mock := NewMockRedisClient()
+	
+	// Pre-populate mock Redis with data
+	mock.Set(nil, "192.168.1.1", "alice", 0)
+	mock.Set(nil, "192.168.1.2", "bob", 0)
+	
+	// Create store - should load data from Redis
+	store := NewClaimStoreWithRedisClient(mock)
+
+	// Verify data was loaded
+	claimant, exists := store.GetClaim("192.168.1.1")
+	if !exists || claimant != "alice" {
+		t.Error("Expected alice claim to be loaded from Redis")
 	}
-	return cmd
-}
 
-func (m *MockRedisClient) Scan(ctx context.Context, cursor uint64, match string, count int64) *redis.ScanCmd {
-	cmd := redis.NewScanCmd(ctx, "scan", cursor, "match", match, "count", count)
-	if m.scanError != nil {
-		cmd.SetErr(m.scanError)
-	} else {
-		keys := make([]string, 0)
-		for k := range m.data {
-			keys = append(keys, k)
-		}
-		cmd.SetVal(keys, 0) // Return all keys with cursor 0 (no more pages)
+	claimant, exists = store.GetClaim("192.168.1.2")
+	if !exists || claimant != "bob" {
+		t.Error("Expected bob claim to be loaded from Redis")
 	}
-	return cmd
+
+	// Verify Scan was called during loading
+	if !mock.HasCall("Scan") {
+		t.Error("Expected Scan call during Redis loading")
+	}
 }
 
-func (m *MockRedisClient) Close() error {
-	return nil
-}
+func TestClaimStore_WithRedisClient_OverwriteClaim(t *testing.T) {
+	mock := NewMockRedisClient()
+	store := NewClaimStoreWithRedisClient(mock)
 
-// Note: The actual Redis tests would require a more complex setup
-// This demonstrates the testing approach but would need proper Redis mocking
-// or integration test setup for full Redis functionality testing
+	// Set initial claim
+	err := store.ProcessClaim("192.168.1.1", "alice")
+	if err != nil {
+		t.Fatalf("ProcessClaim failed: %v", err)
+	}
+
+	// Overwrite with new claimant
+	err = store.ProcessClaim("192.168.1.1", "bob")
+	if err != nil {
+		t.Fatalf("ProcessClaim failed: %v", err)
+	}
+
+	// Verify new claimant
+	claimant, exists := store.GetClaim("192.168.1.1")
+	if !exists || claimant != "bob" {
+		t.Error("Expected claim to be overwritten with 'bob'")
+	}
+
+	// Verify both Redis calls were made
+	if !mock.HasCall("Set:192.168.1.1:alice") {
+		t.Error("Expected first Set call to Redis")
+	}
+	if !mock.HasCall("Set:192.168.1.1:bob") {
+		t.Error("Expected second Set call to Redis")
+	}
+}

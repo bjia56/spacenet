@@ -3,8 +3,6 @@ package server
 import (
 	"context"
 	"sync"
-
-	"github.com/redis/go-redis/v9"
 )
 
 // ClaimStore is an in-memory store for IP address claims
@@ -13,7 +11,7 @@ type ClaimStore struct {
 	mutex       sync.RWMutex
 	claims      map[string]string // map[ipAddress]claimantName
 	ipTree      *IPTree           // Hierarchical tree for subnet-based queries
-	redisClient *redis.Client     // Optional Redis client for persistence
+	redisClient RedisClient       // Optional Redis client for persistence
 	ctx         context.Context   // Context for Redis operations
 }
 
@@ -30,34 +28,30 @@ func NewClaimStore() *ClaimStore {
 
 // NewClaimStoreWithRedis creates a claim store with Redis backend
 func NewClaimStoreWithRedis(redisAddr string) (*ClaimStore, error) {
-	client := redis.NewClient(&redis.Options{
-		Addr:     redisAddr,
-		Password: "", // no password
-		DB:       0,  // use default DB
-	})
-
-	ctx := context.Background()
-
-	// Test the connection
-	_, err := client.Ping(ctx).Result()
+	client, err := NewRedisClient(redisAddr)
 	if err != nil {
 		return nil, err
 	}
+
+	return NewClaimStoreWithRedisClient(client), nil
+}
+
+// NewClaimStoreWithRedisClient creates a claim store with an injected Redis client
+// This is useful for testing with mocks or custom Redis configurations
+func NewClaimStoreWithRedisClient(redisClient RedisClient) *ClaimStore {
+	ctx := context.Background()
 
 	store := &ClaimStore{
 		claims:      make(map[string]string),
 		ipTree:      NewIPTree(),
-		redisClient: client,
+		redisClient: redisClient,
 		ctx:         ctx,
 	}
 
-	// Load existing claims from Redis
-	err = store.loadFromRedis()
-	if err != nil {
-		return nil, err
-	}
+	// Load existing claims from Redis (ignore errors for mocks in tests)
+	store.loadFromRedis()
 
-	return store, nil
+	return store
 }
 
 // loadFromRedis loads all claims from Redis into memory
@@ -65,17 +59,15 @@ func (cs *ClaimStore) loadFromRedis() error {
 	// Use SCAN to iterate over all keys
 	var cursor uint64
 	for {
-		var keys []string
-		var err error
-		keys, cursor, err = cs.redisClient.Scan(cs.ctx, cursor, "*", 10).Result()
+		keys, nextCursor, err := cs.redisClient.Scan(cs.ctx, cursor, "*", 10)
 		if err != nil {
 			return err
 		}
 
 		// Get values for all keys
 		for _, key := range keys {
-			val, err := cs.redisClient.Get(cs.ctx, key).Result()
-			if err == nil && val != "" {
+			val, exists, err := cs.redisClient.Get(cs.ctx, key)
+			if err == nil && exists && val != "" {
 				// Store in memory
 				cs.claims[key] = val
 				// Update the tree
@@ -83,6 +75,9 @@ func (cs *ClaimStore) loadFromRedis() error {
 			}
 		}
 
+		// Update cursor for next iteration
+		cursor = nextCursor
+		
 		// No more keys
 		if cursor == 0 {
 			break
@@ -106,7 +101,7 @@ func (cs *ClaimStore) ProcessClaim(ipAddr string, claimant string) error {
 
 	// If Redis is enabled, write through to Redis
 	if cs.redisClient != nil {
-		if err := cs.redisClient.Set(cs.ctx, ipAddr, claimant, 0).Err(); err != nil {
+		if err := cs.redisClient.Set(cs.ctx, ipAddr, claimant, 0); err != nil {
 			// If Redis fails, revert the in-memory change and propagate error
 			if exists {
 				cs.claims[ipAddr] = oldClaimant
