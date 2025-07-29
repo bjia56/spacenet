@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.5'
+        
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+          
+    - name: Test Server
+      run: |
+        cd server
+        go test -race -coverprofile=coverage.out -covermode=atomic ./...
+        
+    - name: Test TUI
+      run: |
+        cd tui
+        go test -race -coverprofile=coverage.out -covermode=atomic ./...
+        
+    - name: Upload server coverage
+      uses: actions/upload-artifact@v4
+      with:
+        name: server-coverage
+        path: server/coverage.out
+        retention-days: 7
+        
+    - name: Upload TUI coverage
+      uses: actions/upload-artifact@v4
+      with:
+        name: tui-coverage
+        path: tui/coverage.out
+        retention-days: 7
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: test
+    
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.5'
+        
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+    
+    - name: Build Server
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        cd server
+        mkdir -p ../dist
+        if [ "$GOOS" = "windows" ]; then
+          go build -o ../dist/spacenet-server-${{ matrix.goos }}-${{ matrix.goarch }}.exe .
+        else
+          go build -o ../dist/spacenet-server-${{ matrix.goos }}-${{ matrix.goarch }} .
+        fi
+        
+    - name: Build TUI
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        cd tui
+        if [ "$GOOS" = "windows" ]; then
+          go build -o ../dist/spacenet-tui-${{ matrix.goos }}-${{ matrix.goarch }}.exe .
+        else
+          go build -o ../dist/spacenet-tui-${{ matrix.goos }}-${{ matrix.goarch }} .
+        fi
+        
+    - name: Upload binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: dist/
+        retention-days: 30
