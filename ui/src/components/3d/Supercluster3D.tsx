@@ -36,12 +36,17 @@ export function Supercluster3D({ ipSeed }: Supercluster3DProps) {
     const colors: number[] = [];
     const sizes: number[] = [];
 
-    // Store cluster centers and galaxy data for rotation
-    const clusterCenters: THREE.Vector3[] = [];
+    // GPU rotation attributes
+    const originalPositions: number[] = [];
+    const clusterCenters: number[] = [];
+    const rotationAxes: number[] = [];
+    const rotationSpeeds: number[] = [];
+    
+    // Store cluster data for geometry setup
+    const clusterCenterVectors: THREE.Vector3[] = [];
     const clusterRotationAxes: THREE.Vector3[] = [];
     const clusterRotationSpeeds: number[] = [];
     const galaxyClusterIds: number[] = [];
-    const originalPositions: THREE.Vector3[] = [];
 
     for (let cluster = 0; cluster < clusterParams.numGalaxyClusters; cluster++) {
       const pointsInCluster = Math.floor(totalPoints / clusterParams.numGalaxyClusters);
@@ -56,7 +61,7 @@ export function Supercluster3D({ ipSeed }: Supercluster3DProps) {
       const centerZ = clusterRadius * Math.cos(clusterPhi);
 
       const clusterCenter = new THREE.Vector3(centerX, centerY, centerZ);
-      clusterCenters.push(clusterCenter);
+      clusterCenterVectors.push(clusterCenter);
 
       // Generate rotation data for this cluster
       const rotationAxis = new THREE.Vector3(
@@ -81,7 +86,10 @@ export function Supercluster3D({ ipSeed }: Supercluster3DProps) {
 
         const galaxyPosition = new THREE.Vector3(x, y, z);
         positions.push(x, y, z);
-        originalPositions.push(galaxyPosition.clone());
+        originalPositions.push(x, y, z);
+        clusterCenters.push(centerX, centerY, centerZ);
+        rotationAxes.push(rotationAxis.x, rotationAxis.y, rotationAxis.z);
+        rotationSpeeds.push(rotationSpeed);
         galaxyClusterIds.push(cluster);
 
         // Calculate brightness based on distance from cluster center
@@ -151,11 +159,14 @@ export function Supercluster3D({ ipSeed }: Supercluster3DProps) {
       positions, 
       colors, 
       sizes, 
-      clusterCenters, 
+      originalPositions,
+      clusterCenters,
+      rotationAxes,
+      rotationSpeeds,
+      clusterCenterVectors, 
       clusterRotationAxes, 
       clusterRotationSpeeds, 
-      galaxyClusterIds, 
-      originalPositions 
+      galaxyClusterIds
     };
   }, [ipSeed, clusterParams]);
 
@@ -167,55 +178,22 @@ export function Supercluster3D({ ipSeed }: Supercluster3DProps) {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(galaxyClusterData.positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(galaxyClusterData.colors, 3));
     geometry.setAttribute('size', new THREE.Float32BufferAttribute(galaxyClusterData.sizes, 1));
+    
+    // Add rotation attributes for GPU-based rotation
+    geometry.setAttribute('originalPosition', new THREE.Float32BufferAttribute(galaxyClusterData.originalPositions, 3));
+    geometry.setAttribute('clusterCenter', new THREE.Float32BufferAttribute(galaxyClusterData.clusterCenters, 3));
+    geometry.setAttribute('rotationAxis', new THREE.Float32BufferAttribute(galaxyClusterData.rotationAxes, 3));
+    geometry.setAttribute('rotationSpeed', new THREE.Float32BufferAttribute(galaxyClusterData.rotationSpeeds, 1));
 
-    // Use shared galaxy shader with supercluster preset
+    // Use shared galaxy shader with supercluster preset (rotation enabled)
     const material = createGalaxyShaderMaterial(GALAXY_SHADER_PRESETS.supercluster);
 
     return new THREE.Points(geometry, material);
   }, [galaxyClusterData]);
 
-  // Animation loop
+  // Animation loop - now only updates shader time uniform
   useFrame((state) => {
-    // Update galaxy positions for cluster rotation
-    if (galaxyPoints && galaxyPoints.geometry.attributes.position) {
-      const positionAttribute = galaxyPoints.geometry.attributes.position;
-      const time = state.clock.elapsedTime;
-
-      for (let i = 0; i < galaxyClusterData.originalPositions.length; i++) {
-        const clusterId = galaxyClusterData.galaxyClusterIds[i];
-        const clusterCenter = galaxyClusterData.clusterCenters[clusterId];
-        const rotationAxis = galaxyClusterData.clusterRotationAxes[clusterId];
-        const rotationSpeed = galaxyClusterData.clusterRotationSpeeds[clusterId];
-        const originalPos = galaxyClusterData.originalPositions[i];
-
-        // Calculate rotation angle
-        const angle = time * rotationSpeed;
-
-        // Get position relative to cluster center
-        const relativePos = originalPos.clone().sub(clusterCenter);
-
-        // Rotate using Rodrigues' rotation formula
-        const cosAngle = Math.cos(angle);
-        const sinAngle = Math.sin(angle);
-        const dotProduct = relativePos.dot(rotationAxis);
-        const crossProduct = rotationAxis.clone().cross(relativePos);
-
-        const rotatedRelativePos = relativePos.clone()
-          .multiplyScalar(cosAngle)
-          .add(crossProduct.multiplyScalar(sinAngle))
-          .add(rotationAxis.clone().multiplyScalar(dotProduct * (1 - cosAngle)));
-
-        // Get final rotated position
-        const rotatedPos = clusterCenter.clone().add(rotatedRelativePos);
-
-        // Update the position attribute
-        positionAttribute.setXYZ(i, rotatedPos.x, rotatedPos.y, rotatedPos.z);
-      }
-
-      positionAttribute.needsUpdate = true;
-    }
-
-    // Update shader time uniform for pulsing effect
+    // Update shader time uniform for GPU-based rotation and pulsing effects
     if (galaxyPoints && galaxyPoints.material instanceof THREE.ShaderMaterial) {
       galaxyPoints.material.uniforms.time.value = state.clock.elapsedTime;
     }

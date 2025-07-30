@@ -17,6 +17,8 @@ export interface GalaxyShaderOptions {
   outerGlowIntensity?: number;
   /** Alpha falloff power (default: 2.0 for quadratic) */
   alphaFalloff?: number;
+  /** Enable rotation calculations (default: false) */
+  enableRotation?: boolean;
 }
 
 export function createGalaxyShaderMaterial(options: GalaxyShaderOptions = {}): THREE.ShaderMaterial {
@@ -28,32 +30,81 @@ export function createGalaxyShaderMaterial(options: GalaxyShaderOptions = {}): T
     sizeScale = 300.0,
     innerGlowIntensity = 2.0,
     outerGlowIntensity = 1.5,
-    alphaFalloff = 2.0
+    alphaFalloff = 2.0,
+    enableRotation = false
   } = options;
+
+  const vertexShader = enableRotation ? `
+    attribute float size;
+    attribute vec3 originalPosition;
+    attribute vec3 clusterCenter;
+    attribute vec3 rotationAxis;
+    attribute float rotationSpeed;
+    varying vec3 vColor;
+    varying float vSize;
+    uniform float time;
+
+    // Rodrigues rotation formula in GLSL
+    vec3 rotateAroundAxis(vec3 position, vec3 axis, float angle) {
+      float cosAngle = cos(angle);
+      float sinAngle = sin(angle);
+      float dotProduct = dot(position, axis);
+      vec3 crossProduct = cross(axis, position);
+
+      return position * cosAngle +
+             crossProduct * sinAngle +
+             axis * dotProduct * (1.0 - cosAngle);
+    }
+
+    void main() {
+      vColor = color;
+      vSize = size;
+
+      // Calculate rotation angle
+      float angle = time * rotationSpeed;
+
+      // Get position relative to cluster center
+      vec3 relativePos = originalPosition - clusterCenter;
+
+      // Rotate using GPU-optimized vector operations
+      vec3 rotatedRelativePos = rotateAroundAxis(relativePos, rotationAxis, angle);
+
+      // Final world position
+      vec3 worldPosition = clusterCenter + rotatedRelativePos;
+
+      vec4 mvPosition = modelViewMatrix * vec4(worldPosition, 1.0);
+
+      // Add pulsing animation
+      float pulse = ${pulseBase.toFixed(1)} + ${pulseAmplitude.toFixed(1)} * sin(time * ${pulseFrequency.toFixed(1)} + worldPosition.x * ${positionFrequency.toFixed(1)} + worldPosition.y * ${positionFrequency.toFixed(1)} + worldPosition.z * ${positionFrequency.toFixed(1)});
+      gl_PointSize = size * pulse * (${sizeScale.toFixed(1)} / -mvPosition.z);
+
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  ` : `
+    attribute float size;
+    varying vec3 vColor;
+    varying float vSize;
+    uniform float time;
+
+    void main() {
+      vColor = color;
+      vSize = size;
+
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+
+      // Add subtle animation based on time and position
+      float pulse = ${pulseBase.toFixed(1)} + ${pulseAmplitude.toFixed(1)} * sin(time * ${pulseFrequency.toFixed(1)} + position.x * ${positionFrequency.toFixed(1)} + position.y * ${positionFrequency.toFixed(1)} + position.z * ${positionFrequency.toFixed(1)});
+      gl_PointSize = size * pulse * (${sizeScale.toFixed(1)} / -mvPosition.z);
+
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `;
 
   return new THREE.ShaderMaterial({
     uniforms: {
       time: { value: 0 }
     },
-    vertexShader: `
-      attribute float size;
-      varying vec3 vColor;
-      varying float vSize;
-      uniform float time;
-
-      void main() {
-        vColor = color;
-        vSize = size;
-
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-
-        // Add subtle animation based on time and position
-        float pulse = ${pulseBase.toFixed(1)} + ${pulseAmplitude.toFixed(1)} * sin(time * ${pulseFrequency.toFixed(1)} + position.x * ${positionFrequency.toFixed(1)} + position.y * ${positionFrequency.toFixed(1)} + position.z * ${positionFrequency.toFixed(1)});
-        gl_PointSize = size * pulse * (${sizeScale.toFixed(1)} / -mvPosition.z);
-
-        gl_Position = projectionMatrix * mvPosition;
-      }
-    `,
+    vertexShader,
     fragmentShader: `
       varying vec3 vColor;
       varying float vSize;
@@ -98,7 +149,7 @@ export const GALAXY_SHADER_PRESETS = {
     alphaFalloff: 2.0
   } as GalaxyShaderOptions,
 
-  /** For superclusters - brighter and more dramatic */
+  /** For superclusters - brighter and more dramatic with GPU rotation */
   supercluster: {
     pulseFrequency: 1.5,
     pulseAmplitude: 0.3,
@@ -107,7 +158,8 @@ export const GALAXY_SHADER_PRESETS = {
     sizeScale: 200.0,
     innerGlowIntensity: 3.0,
     outerGlowIntensity: 1.5,
-    alphaFalloff: 3.0
+    alphaFalloff: 3.0,
+    enableRotation: true
   } as GalaxyShaderOptions,
 
   /** For galaxy clusters - moderate glow */
@@ -124,7 +176,6 @@ export const GALAXY_SHADER_PRESETS = {
 };
 
 export function createWavePropagationShaderMaterial(
-  numFilaments: number,
   options: GalaxyShaderOptions = {}
 ): THREE.ShaderMaterial {
   const {

@@ -383,7 +383,7 @@ export function GreatWall3D({ ipSeed }: GreatWall3DProps) {
     geometry.setAttribute('filamentId', new THREE.Float32BufferAttribute(galaxyPointData.filamentIds, 1));
 
     // Use wave propagation shader with cosmic web preset
-    const material = createWavePropagationShaderMaterial(cosmicWeb.length, GALAXY_SHADER_PRESETS.cosmicWeb);
+    const material = createWavePropagationShaderMaterial(GALAXY_SHADER_PRESETS.cosmicWeb);
 
     return new THREE.Points(geometry, material);
   }, [galaxyPointData]);
