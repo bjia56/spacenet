@@ -12,11 +12,18 @@ interface GreatWall3DProps {
 interface SplinePoint {
   position: THREE.Vector3;
   tangent: THREE.Vector3;
+  width: number;
+}
+
+interface Galaxy {
+  position: THREE.Vector3;
+  distanceToSpline: number;
+  size: number;
 }
 
 interface Filament {
   spline: SplinePoint[];
-  galaxies: THREE.Vector3[];
+  galaxies: Galaxy[];
   color: THREE.Color;
 }
 
@@ -101,40 +108,171 @@ export function GreatWall3D({ ipSeed }: GreatWall3DProps) {
           tangent = nextPos.sub(prevPos).normalize();
         }
 
-        spline.push({ position: basePos, tangent });
+        // Calculate variable width along the spline with organic variation
+        // Use position-based seed for consistent but varied base width
+        const baseWidthSeed = t * 12345.67 + f * 9876.54;
+        const baseWidth = 1.0 + (Math.sin(baseWidthSeed) * 0.5 + 0.5) * 2.0; // Base width 1-3
+
+        // Multiple frequency variations for organic width changes
+        // Use filament index and position for unique phase offsets
+        const lowFreqVariation = Math.sin(t * Math.PI * 0.5 + f * 2.1 + s * 0.3) * 0.4;
+        const midFreqVariation = Math.sin(t * Math.PI * 2 + f * 1.7 + s * 0.5) * 0.3;
+        const highFreqVariation = Math.sin(t * Math.PI * 8 + f * 3.2 + s * 0.8) * 0.2;
+        const noiseVariation = (Math.sin(t * 31.4 + f * 15.9 + s * 7.3) * 0.5) * 0.3;
+
+        // Combine variations with different weights
+        const combinedVariation = lowFreqVariation + midFreqVariation + highFreqVariation + noiseVariation;
+
+        // Ensure minimum width and apply variation
+        const width = baseWidth * (0.4 + 0.6 * (1 + combinedVariation));
+
+        spline.push({ position: basePos, tangent, width });
       }
 
-      // Place galaxies along the spline
-      const galaxyCount = 15 + Math.floor(rng.random() * 25); // 15-40 galaxies per filament
-      const galaxies: THREE.Vector3[] = [];
+      // Create smooth curve from spline points for proper galaxy distribution
+      const curvePoints = spline.map(point => point.position);
+      const curve = new THREE.CatmullRomCurve3(curvePoints, false, 'centripetal');
+
+      // Place many tiny galaxies along the smooth curve
+      const galaxyCount = 5000 + Math.floor(rng.random() * 5000); // galaxies per filament
+      const galaxies: Galaxy[] = [];
 
       for (let g = 0; g < galaxyCount; g++) {
-        // Distribute galaxies non-uniformly (cluster more at certain points)
+        // Distribute galaxies more evenly along the curve with some clustering
         const clustering = rng.random();
         let t: number;
 
-        if (clustering < 0.3) {
-          // Cluster near start
-          t = rng.random() * 0.3;
-        } else if (clustering < 0.6) {
-          // Cluster near end
-          t = 0.7 + rng.random() * 0.3;
+        if (clustering < 0.2) {
+          // Some clustering near start
+          t = rng.random() * 0.25;
+        } else if (clustering < 0.4) {
+          // Some clustering near end
+          t = 0.75 + rng.random() * 0.25;
         } else {
-          // Distribute randomly
+          // Most galaxies distributed evenly
           t = rng.random();
         }
 
-        const splineIndex = Math.floor(t * (spline.length - 1));
-        const splinePoint = spline[splineIndex];
+        // Get position along the smooth curve
+        const curvePosition = curve.getPointAt(t);
 
-        // Add some scatter around the spline
-        const scatter = splinePoint.tangent.clone().cross(new THREE.Vector3(0, 1, 0)).normalize();
-        const scatterAmount = (rng.random() - 0.5) * 2;
+        // Get tangent at this point for scatter direction
+        const tangent = curve.getTangentAt(t).normalize();
 
-        const galaxyPos = splinePoint.position.clone();
-        galaxyPos.add(scatter.multiplyScalar(scatterAmount));
+        // Interpolate width smoothly between spline points
+        const splineT = t * (spline.length - 1);
+        const splineIndex = Math.floor(splineT);
+        const localT = splineT - splineIndex;
 
-        galaxies.push(galaxyPos);
+        const currentPoint = spline[Math.min(splineIndex, spline.length - 1)];
+        const nextPoint = spline[Math.min(splineIndex + 1, spline.length - 1)];
+
+        // Linear interpolation between current and next point widths
+        const filamentWidth = currentPoint.width + (nextPoint.width - currentPoint.width) * localT;
+
+        // Scatter based on filament width
+        const scatter1 = tangent.clone().cross(new THREE.Vector3(0, 1, 0)).normalize();
+        const scatter2 = tangent.clone().cross(scatter1).normalize();
+
+        const scatterAmount1 = (rng.random() - 0.5) * filamentWidth * 0.8;
+        const scatterAmount2 = (rng.random() - 0.5) * filamentWidth * 0.8;
+
+        const galaxyPos = curvePosition.clone();
+        galaxyPos.add(scatter1.multiplyScalar(scatterAmount1));
+        galaxyPos.add(scatter2.multiplyScalar(scatterAmount2));
+
+        // Calculate distance to nearest spline point for glow intensity
+        let minDistance = Infinity;
+        for (const splinePoint of spline) {
+          const distance = galaxyPos.distanceTo(splinePoint.position);
+          minDistance = Math.min(minDistance, distance);
+        }
+
+        const galaxy: Galaxy = {
+          position: galaxyPos,
+          distanceToSpline: minDistance,
+          size: 0.08 + rng.random() * 0.12
+        };
+
+        galaxies.push(galaxy);
+      }
+
+      // Add isolated particle clusters at greater distances
+      const clusterCount = 3 + Math.floor(rng.random() * 5); // 3-7 clusters per filament
+
+      for (let c = 0; c < clusterCount; c++) {
+        // Random position along the spline
+        const clusterT = rng.random();
+        const clusterPosition = curve.getPointAt(clusterT);
+
+        // Get width at this position for reference
+        const splineT = clusterT * (spline.length - 1);
+        const splineIndex = Math.floor(splineT);
+        const localT = splineT - splineIndex;
+        const currentPoint = spline[Math.min(splineIndex, spline.length - 1)];
+        const nextPoint = spline[Math.min(splineIndex + 1, spline.length - 1)];
+        const localWidth = currentPoint.width + (nextPoint.width - currentPoint.width) * localT;
+
+        // Place cluster at greater distance from spline
+        const tangent = curve.getTangentAt(clusterT).normalize();
+        const scatter1 = tangent.clone().cross(new THREE.Vector3(0, 1, 0)).normalize();
+        const scatter2 = tangent.clone().cross(scatter1).normalize();
+
+        // Cluster distance is 3-6x the local filament width
+        const clusterDistance = localWidth * (3 + rng.random() * 3);
+        const clusterDirection = scatter1.clone().multiplyScalar(rng.random() - 0.5)
+          .add(scatter2.clone().multiplyScalar(rng.random() - 0.5)).normalize();
+
+        const clusterCenter = clusterPosition.clone().add(clusterDirection.multiplyScalar(clusterDistance));
+
+        // Generate particles within the cluster - fewer and irregular
+        const particlesPerCluster = 15 + Math.floor(rng.random() * 25); // 15-40 particles (much fewer)
+        const baseRadius = 0.3 + rng.random() * 0.8; // Smaller base size
+
+        for (let p = 0; p < particlesPerCluster; p++) {
+          // Irregular ellipsoidal distribution instead of perfect sphere
+          const phi = rng.random() * Math.PI * 2;
+          const cosTheta = rng.random() * 2 - 1;
+          const sinTheta = Math.sqrt(1 - cosTheta * cosTheta);
+          const r = Math.pow(rng.random(), 0.5) * baseRadius; // Less concentrated toward center
+
+          // Create irregular shape with different radii in each axis
+          const xStretch = 0.5 + rng.random() * 1.5; // 0.5x to 2x
+          const yStretch = 0.5 + rng.random() * 1.5;
+          const zStretch = 0.5 + rng.random() * 1.5;
+
+          const particleOffset = new THREE.Vector3(
+            r * sinTheta * Math.cos(phi) * xStretch,
+            r * sinTheta * Math.sin(phi) * yStretch,
+            r * cosTheta * zStretch
+          );
+
+          // Add some random noise for more irregular distribution
+          const noise = new THREE.Vector3(
+            (rng.random() - 0.5) * baseRadius * 0.3,
+            (rng.random() - 0.5) * baseRadius * 0.3,
+            (rng.random() - 0.5) * baseRadius * 0.3
+          );
+
+          particleOffset.add(noise);
+
+          const particlePosition = clusterCenter.clone().add(particleOffset);
+
+          // Calculate distance to nearest spline point for brightness
+          let minDistance = Infinity;
+          for (const splinePoint of spline) {
+            const distance = particlePosition.distanceTo(splinePoint.position);
+            minDistance = Math.min(minDistance, distance);
+          }
+
+          const clusterGalaxy: Galaxy = {
+            position: particlePosition,
+            distanceToSpline: minDistance,
+            size: 0.04 + rng.random() * 0.08 // Smaller than main filament galaxies
+          };
+
+          galaxies.push(clusterGalaxy);
+        }
       }
 
       // Assign color based on filament properties
@@ -149,115 +287,140 @@ export function GreatWall3D({ ipSeed }: GreatWall3DProps) {
     return filaments;
   }, [ipSeed]);
 
-  // Create render geometries
-  const { splineGeometries, galaxyInstanceData } = useMemo(() => {
-    const splineGeometries: THREE.BufferGeometry[] = [];
-    const galaxyInstanceData: { positions: THREE.Vector3[], colors: THREE.Color[], scales: number[] } = {
-      positions: [],
-      colors: [],
-      scales: []
-    };
+  // Create galaxy point data with distance-based brightness
+  const galaxyPointData = useMemo(() => {
+    const positions: number[] = [];
+    const colors: number[] = [];
+    const sizes: number[] = [];
 
-    // Generate smooth spline geometries using CatmullRomCurve3
+    // Add galaxies to point data
     cosmicWeb.forEach((filament) => {
-      if (filament.spline.length < 3) return; // Need at least 3 points for smooth curve
-
-      // Extract positions for curve
-      const curvePoints = filament.spline.map(point => point.position);
-
-      // Create smooth curve
-      const curve = new THREE.CatmullRomCurve3(curvePoints, false, 'centripetal');
-
-      // Sample points along the curve for higher resolution
-      const curveResolution = 100; // Higher resolution for smoother curves
-      const curvePositions = curve.getPoints(curveResolution);
-
-      // Convert to line segments for rendering
-      const segments = curvePositions.length - 1;
-      const positions = new Float32Array(segments * 6);
-      const colors = new Float32Array(segments * 6);
-
-      for (let i = 0; i < segments; i++) {
-        const point1 = curvePositions[i];
-        const point2 = curvePositions[i + 1];
-
-        // First point of segment
-        positions[i * 6] = point1.x;
-        positions[i * 6 + 1] = point1.y;
-        positions[i * 6 + 2] = point1.z;
-
-        // Second point of segment
-        positions[i * 6 + 3] = point2.x;
-        positions[i * 6 + 4] = point2.y;
-        positions[i * 6 + 5] = point2.z;
-
-        // Colors for both points
-        colors[i * 6] = filament.color.r * 0.3;
-        colors[i * 6 + 1] = filament.color.g * 0.3;
-        colors[i * 6 + 2] = filament.color.b * 0.3;
-        colors[i * 6 + 3] = filament.color.r * 0.3;
-        colors[i * 6 + 4] = filament.color.g * 0.3;
-        colors[i * 6 + 5] = filament.color.b * 0.3;
-      }
-
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      splineGeometries.push(geometry);
-
-      // Add galaxies to instance data
       filament.galaxies.forEach((galaxy) => {
-        galaxyInstanceData.positions.push(galaxy.clone());
-        galaxyInstanceData.colors.push(filament.color.clone());
-        // Vary galaxy sizes based on seeded random
-        const rng = new SeededRandom(ipSeed + galaxy.x + galaxy.y + galaxy.z);
-        const scale = 0.5 + rng.random() * 1.5; // 0.5 to 2.0 scale
-        galaxyInstanceData.scales.push(scale);
+        // Position
+        positions.push(galaxy.position.x, galaxy.position.y, galaxy.position.z);
+
+        // Calculate brightness based on distance to spline (closer = brighter)
+        const maxDistance = 3.0; // Maximum expected distance for normalization
+        const normalizedDistance = Math.min(galaxy.distanceToSpline / maxDistance, 1.0);
+        const brightness = 1.0 - normalizedDistance * 0.7; // 0.3 to 1.0 range
+
+        // Create color variation while maintaining filament preference
+        const rng = new SeededRandom(ipSeed + galaxy.position.x * 1000 + galaxy.position.y * 1000 + galaxy.position.z * 1000);
+
+        // Get filament color in HSL for easier manipulation
+        const filamentHSL = { h: 0, s: 0, l: 0 };
+        filament.color.getHSL(filamentHSL);
+
+        // Create color variation
+        const colorVariation = rng.random();
+        let finalColor: THREE.Color;
+
+        if (colorVariation < 0.5) {
+          // 50% chance: stay close to filament color with small variations
+          const hueShift = (rng.random() - 0.5) * 0.1; // ±18 degrees
+          const satShift = (rng.random() - 0.5) * 0.3; // ±15% saturation
+          const lightShift = (rng.random() - 0.5) * 0.2; // ±10% lightness
+
+          finalColor = new THREE.Color().setHSL(
+            (filamentHSL.h + hueShift + 1) % 1,
+            Math.max(0, Math.min(1, filamentHSL.s + satShift)),
+            Math.max(0, Math.min(1, filamentHSL.l + lightShift))
+          );
+        } else if (colorVariation < 0.9) {
+          // 40% chance: complementary colors
+          const complementaryHue = (filamentHSL.h + 0.5) % 1;
+          const hueShift = (rng.random() - 0.5) * 0.2;
+
+          finalColor = new THREE.Color().setHSL(
+            (complementaryHue + hueShift + 1) % 1,
+            filamentHSL.s * (0.7 + rng.random() * 0.3),
+            filamentHSL.l * (0.8 + rng.random() * 0.4)
+          );
+        } else {
+          // 10% chance: random colors for rare exotic galaxies
+          finalColor = new THREE.Color().setHSL(
+            rng.random(),
+            0.5 + rng.random() * 0.5,
+            0.3 + rng.random() * 0.4
+          );
+        }
+
+        // Apply brightness to final color
+        const brightColor = finalColor.multiplyScalar(brightness * 2.0);
+        colors.push(brightColor.r, brightColor.g, brightColor.b);
+
+        // Size based on brightness and galaxy size
+        const pointSize = galaxy.size * (0.5 + brightness * 1.5); // Scale up for points
+        sizes.push(pointSize);
       });
     });
 
-    return { splineGeometries, galaxyInstanceData };
-  }, [cosmicWeb, ipSeed]);
+    return { positions, colors, sizes };
+  }, [cosmicWeb]);
 
-  // Create instancedMesh for galaxies
-  const galaxyInstancedMesh = useMemo(() => {
-    if (galaxyInstanceData.positions.length === 0) return null;
+  // Create points mesh with custom glowing shader
+  const galaxyPoints = useMemo(() => {
+    if (galaxyPointData.positions.length === 0) return null;
 
-    const sphereGeometry = new THREE.SphereGeometry(0.8, 8, 6); // Low-poly sphere for performance
-    const material = new THREE.MeshBasicMaterial({ 
-      transparent: true, 
-      opacity: 0.8,
-      blending: THREE.AdditiveBlending
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(galaxyPointData.positions, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(galaxyPointData.colors, 3));
+    geometry.setAttribute('size', new THREE.Float32BufferAttribute(galaxyPointData.sizes, 1));
+
+    // Custom shader material for glowing points
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        time: { value: 0 }
+      },
+      vertexShader: `
+        attribute float size;
+        varying vec3 vColor;
+        varying float vSize;
+        uniform float time;
+
+        void main() {
+          vColor = color;
+          vSize = size;
+
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+
+          // Add subtle animation based on time and position
+          float pulse = 0.8 + 0.2 * sin(time * 2.0 + position.x * 0.1 + position.y * 0.1);
+          gl_PointSize = size * pulse * (300.0 / -mvPosition.z);
+
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vColor;
+        varying float vSize;
+
+        void main() {
+          // Create circular point with soft edges
+          vec2 center = gl_PointCoord - vec2(0.5);
+          float dist = length(center);
+
+          // Soft circular falloff
+          float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+
+          // Add inner glow
+          float innerGlow = 1.0 - smoothstep(0.0, 0.2, dist);
+          vec3 glowColor = vColor * (1.0 + innerGlow * 2.0);
+
+          // Fade out completely at edges
+          alpha *= alpha; // Square for softer edges
+
+          gl_FragColor = vec4(glowColor, alpha);
+        }
+      `,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      vertexColors: true
     });
-    
-    const instancedMesh = new THREE.InstancedMesh(sphereGeometry, material, galaxyInstanceData.positions.length);
-    
-    // Set up instance matrices and colors
-    const matrix = new THREE.Matrix4();
-    const color = new THREE.Color();
-    
-    for (let i = 0; i < galaxyInstanceData.positions.length; i++) {
-      const position = galaxyInstanceData.positions[i];
-      const instanceColor = galaxyInstanceData.colors[i];
-      const scale = galaxyInstanceData.scales[i];
-      
-      // Set position and scale
-      matrix.makeScale(scale, scale, scale);
-      matrix.setPosition(position);
-      instancedMesh.setMatrixAt(i, matrix);
-      
-      // Set color
-      color.copy(instanceColor);
-      instancedMesh.setColorAt(i, color);
-    }
-    
-    instancedMesh.instanceMatrix.needsUpdate = true;
-    if (instancedMesh.instanceColor) {
-      instancedMesh.instanceColor.needsUpdate = true;
-    }
-    
-    return instancedMesh;
-  }, [galaxyInstanceData]);
+
+    return new THREE.Points(geometry, material);
+  }, [galaxyPointData]);
 
   // Animation
   useFrame((state) => {
@@ -265,20 +428,18 @@ export function GreatWall3D({ ipSeed }: GreatWall3DProps) {
       groupRef.current.rotation.y = state.clock.elapsedTime * 0.02;
       groupRef.current.rotation.x = Math.sin(state.clock.elapsedTime * 0.1) * 0.1;
     }
+
+    // Update shader time uniform for pulsing effect
+    if (galaxyPoints && galaxyPoints.material instanceof THREE.ShaderMaterial) {
+      galaxyPoints.material.uniforms.time.value = state.clock.elapsedTime;
+    }
   });
 
   return (
     <group ref={groupRef}>
-      {/* Filament splines */}
-      {splineGeometries.map((geometry, index) => (
-        <lineSegments key={`spline-${index}`} geometry={geometry}>
-          <lineBasicMaterial vertexColors />
-        </lineSegments>
-      ))}
-
-      {/* Galaxies as spheres */}
-      {galaxyInstancedMesh && (
-        <primitive object={galaxyInstancedMesh} />
+      {/* Glowing galaxy points forming the cosmic web structure */}
+      {galaxyPoints && (
+        <primitive object={galaxyPoints} />
       )}
     </group>
   );
