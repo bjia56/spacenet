@@ -13,12 +13,14 @@ import (
 
 // Server represents the server for spacenet
 type Server struct {
-	store       Store
-	listener    *net.UDPConn
-	httpServer  *http.Server
-	port        int
-	httpPort    int
-	httpHandler *HTTPHandler
+	store          Store
+	listener       *net.UDPConn
+	httpServer     *http.Server
+	port           int
+	httpPort       int
+	httpHandler    *HTTPHandler
+	udpPortReady   chan int
+	httpPortReady  chan int
 }
 
 // ServerOptions holds configuration options for the server
@@ -26,14 +28,6 @@ type ServerOptions struct {
 	Port      int
 	HTTPPort  int
 	RedisAddr string // Format: "host:port"
-}
-
-// NewServer creates a new spacenet server instance with default options
-func NewServer(port int) *Server {
-	return NewServerWithOptions(ServerOptions{
-		Port:     port,
-		HTTPPort: 8080,
-	})
 }
 
 // NewServerWithOptions creates a new spacenet server instance with custom options
@@ -55,10 +49,12 @@ func NewServerWithOptions(opts ServerOptions) *Server {
 	httpHandler := NewHTTPHandler(store)
 
 	return &Server{
-		store:       store,
-		port:        opts.Port,
-		httpPort:    opts.HTTPPort,
-		httpHandler: httpHandler,
+		store:         store,
+		port:          opts.Port,
+		httpPort:      opts.HTTPPort,
+		httpHandler:   httpHandler,
+		udpPortReady:  make(chan int, 1),
+		httpPortReady: make(chan int, 1),
 	}
 }
 
@@ -92,6 +88,18 @@ func (s *Server) startUDPServer() error {
 	}
 	s.listener = conn
 
+	// Update port with the actual assigned port if using ephemeral port (0)
+	if s.port == 0 {
+		s.port = conn.LocalAddr().(*net.UDPAddr).Port
+	}
+
+	// Notify that UDP port is ready
+	select {
+	case s.udpPortReady <- s.port:
+	default:
+		// Channel already has a value, which is fine
+	}
+
 	log.Printf("SpaceNet UDP server listening on [%s]:%d", addr.IP, s.port)
 
 	// Start processing packets
@@ -112,13 +120,51 @@ func (s *Server) startHTTPServer() error {
 
 	// Start the HTTP server in a goroutine
 	go func() {
+		listener, err := net.Listen("tcp", s.httpServer.Addr)
+		if err != nil {
+			log.Printf("Failed to create HTTP listener: %v", err)
+			return
+		}
+
+		// Update httpPort with the actual assigned port if using ephemeral port (0)
+		if s.httpPort == 0 {
+			s.httpPort = listener.Addr().(*net.TCPAddr).Port
+		}
+
+		// Notify that HTTP port is ready
+		select {
+		case s.httpPortReady <- s.httpPort:
+		default:
+			// Channel already has a value, which is fine
+		}
+
 		log.Printf("SpaceNet HTTP server listening on :%d", s.httpPort)
-		if err := s.httpServer.ListenAndServe(); err != http.ErrServerClosed {
+		if err := s.httpServer.Serve(listener); err != http.ErrServerClosed {
 			log.Printf("HTTP server error: %v", err)
 		}
 	}()
 
 	return nil
+}
+
+// WaitForUDPPort waits for the UDP server to be ready and returns the port
+func (s *Server) WaitForUDPPort(timeout time.Duration) (int, error) {
+	select {
+	case port := <-s.udpPortReady:
+		return port, nil
+	case <-time.After(timeout):
+		return 0, fmt.Errorf("timeout waiting for UDP port")
+	}
+}
+
+// WaitForHTTPPort waits for the HTTP server to be ready and returns the port
+func (s *Server) WaitForHTTPPort(timeout time.Duration) (int, error) {
+	select {
+	case port := <-s.httpPortReady:
+		return port, nil
+	case <-time.After(timeout):
+		return 0, fmt.Errorf("timeout waiting for HTTP port")
+	}
 }
 
 // Stop stops all server components
@@ -165,7 +211,7 @@ func (s *Server) processPackets() {
 	jobs := make(chan claimJob, 100)
 
 	// Start worker goroutines
-	for i := 0; i < numWorkers; i++ {
+	for i := range numWorkers {
 		go func(workerID int) {
 			for job := range jobs {
 				// Process the claim
@@ -179,8 +225,8 @@ func (s *Server) processPackets() {
 
 	// Main loop to receive UDP packets
 	for {
-		// Buffer for incoming packets
-		buffer := make([]byte, 32) // Max 32-byte payload as per requirements
+		// Buffer for incoming packets - read more than max to detect oversized packets
+		buffer := make([]byte, 64) // Read up to 64 bytes to detect oversized packets
 
 		n, clientAddr, err := s.listener.ReadFromUDP(buffer)
 		if err != nil {
