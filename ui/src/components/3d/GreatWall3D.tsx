@@ -4,7 +4,7 @@ import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { SeededRandom } from '@/lib/seededRandom';
-import { createGalaxyShaderMaterial, GALAXY_SHADER_PRESETS } from '@/shaders/galaxyShaders';
+import { createWavePropagationShaderMaterial, GALAXY_SHADER_PRESETS } from '@/shaders/galaxyShaders';
 
 interface GreatWall3DProps {
   ipSeed: number;
@@ -20,6 +20,8 @@ interface Galaxy {
   position: THREE.Vector3;
   distanceToSpline: number;
   size: number;
+  filamentId: number;
+  wavePosition: number; // Position along filament (0 to 1)
 }
 
 interface Filament {
@@ -192,7 +194,9 @@ export function GreatWall3D({ ipSeed }: GreatWall3DProps) {
         const galaxy: Galaxy = {
           position: galaxyPos,
           distanceToSpline: minDistance,
-          size: 0.08 + rng.random() * 0.12
+          size: 0.08 + rng.random() * 0.12,
+          filamentId: f,
+          wavePosition: t // Store the t parameter as wave position
         };
 
         galaxies.push(galaxy);
@@ -269,7 +273,9 @@ export function GreatWall3D({ ipSeed }: GreatWall3DProps) {
           const clusterGalaxy: Galaxy = {
             position: particlePosition,
             distanceToSpline: minDistance,
-            size: 0.04 + rng.random() * 0.08 // Smaller than main filament galaxies
+            size: 0.04 + rng.random() * 0.08, // Smaller than main filament galaxies
+            filamentId: f,
+            wavePosition: clusterT // Use cluster position along filament
           };
 
           galaxies.push(clusterGalaxy);
@@ -293,6 +299,8 @@ export function GreatWall3D({ ipSeed }: GreatWall3DProps) {
     const positions: number[] = [];
     const colors: number[] = [];
     const sizes: number[] = [];
+    const wavePositions: number[] = [];
+    const filamentIds: number[] = [];
 
     // Add galaxies to point data
     cosmicWeb.forEach((filament) => {
@@ -353,10 +361,14 @@ export function GreatWall3D({ ipSeed }: GreatWall3DProps) {
         // Size based on brightness and galaxy size
         const pointSize = galaxy.size * (0.5 + brightness * 1.5); // Scale up for points
         sizes.push(pointSize);
+
+        // Wave data for animation
+        wavePositions.push(galaxy.wavePosition);
+        filamentIds.push(galaxy.filamentId);
       });
     });
 
-    return { positions, colors, sizes };
+    return { positions, colors, sizes, wavePositions, filamentIds };
   }, [cosmicWeb]);
 
   // Create points mesh with custom glowing shader
@@ -367,21 +379,18 @@ export function GreatWall3D({ ipSeed }: GreatWall3DProps) {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(galaxyPointData.positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(galaxyPointData.colors, 3));
     geometry.setAttribute('size', new THREE.Float32BufferAttribute(galaxyPointData.sizes, 1));
+    geometry.setAttribute('wavePosition', new THREE.Float32BufferAttribute(galaxyPointData.wavePositions, 1));
+    geometry.setAttribute('filamentId', new THREE.Float32BufferAttribute(galaxyPointData.filamentIds, 1));
 
-    // Use shared galaxy shader with cosmic web preset
-    const material = createGalaxyShaderMaterial(GALAXY_SHADER_PRESETS.cosmicWeb);
+    // Use wave propagation shader with cosmic web preset
+    const material = createWavePropagationShaderMaterial(cosmicWeb.length, GALAXY_SHADER_PRESETS.cosmicWeb);
 
     return new THREE.Points(geometry, material);
   }, [galaxyPointData]);
 
   // Animation
   useFrame((state) => {
-    if (groupRef.current) {
-      groupRef.current.rotation.y = state.clock.elapsedTime * 0.02;
-      groupRef.current.rotation.x = Math.sin(state.clock.elapsedTime * 0.1) * 0.1;
-    }
-
-    // Update shader time uniform for pulsing effect
+    // Update shader uniforms for wave propagation and pulsing effect
     if (galaxyPoints && galaxyPoints.material instanceof THREE.ShaderMaterial) {
       galaxyPoints.material.uniforms.time.value = state.clock.elapsedTime;
     }
