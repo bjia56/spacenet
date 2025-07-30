@@ -19,6 +19,8 @@ export interface GalaxyShaderOptions {
   alphaFalloff?: number;
   /** Enable rotation calculations (default: false) */
   enableRotation?: boolean;
+  /** Enable dual rotation: individual + orbital (default: false) */
+  enableDualRotation?: boolean;
 }
 
 export function createGalaxyShaderMaterial(options: GalaxyShaderOptions = {}): THREE.ShaderMaterial {
@@ -31,10 +33,60 @@ export function createGalaxyShaderMaterial(options: GalaxyShaderOptions = {}): T
     innerGlowIntensity = 2.0,
     outerGlowIntensity = 1.5,
     alphaFalloff = 2.0,
-    enableRotation = false
+    enableRotation = false,
+    enableDualRotation = false
   } = options;
 
-  const vertexShader = enableRotation ? `
+  const vertexShader = enableDualRotation ? `
+    attribute float size;
+    attribute vec3 originalPosition;
+    attribute vec3 clusterCenter;
+    attribute vec3 rotationAxis;
+    attribute float rotationSpeed;
+    attribute vec3 groupCenter;
+    attribute float orbitalSpeed;
+    varying vec3 vColor;
+    varying float vSize;
+    uniform float time;
+
+    // Rodrigues rotation formula in GLSL
+    vec3 rotateAroundAxis(vec3 position, vec3 axis, float angle) {
+      float cosAngle = cos(angle);
+      float sinAngle = sin(angle);
+      float dotProduct = dot(position, axis);
+      vec3 crossProduct = cross(axis, position);
+      
+      return position * cosAngle + 
+             crossProduct * sinAngle + 
+             axis * dotProduct * (1.0 - cosAngle);
+    }
+
+    void main() {
+      vColor = color;
+      vSize = size;
+
+      // First: Individual galaxy rotation
+      float individualAngle = time * rotationSpeed;
+      vec3 relativePos = originalPosition - clusterCenter;
+      vec3 rotatedRelativePos = rotateAroundAxis(relativePos, rotationAxis, individualAngle);
+      vec3 rotatedGalaxyPos = clusterCenter + rotatedRelativePos;
+      
+      // Second: Orbital motion around group center
+      float orbitalAngle = time * orbitalSpeed;
+      vec3 orbitalRelativePos = rotatedGalaxyPos - groupCenter;
+      vec3 orbitalAxis = vec3(0.0, 1.0, 0.0); // Group rotates around Y-axis
+      vec3 finalRotatedPos = rotateAroundAxis(orbitalRelativePos, orbitalAxis, orbitalAngle);
+      vec3 worldPosition = groupCenter + finalRotatedPos;
+
+      vec4 mvPosition = modelViewMatrix * vec4(worldPosition, 1.0);
+
+      // Add pulsing animation
+      float pulse = ${pulseBase.toFixed(1)} + ${pulseAmplitude.toFixed(1)} * sin(time * ${pulseFrequency.toFixed(1)} + worldPosition.x * ${positionFrequency.toFixed(1)} + worldPosition.y * ${positionFrequency.toFixed(1)} + worldPosition.z * ${positionFrequency.toFixed(1)});
+      gl_PointSize = size * pulse * (${sizeScale.toFixed(1)} / -mvPosition.z);
+
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  ` : enableRotation ? `
     attribute float size;
     attribute vec3 originalPosition;
     attribute vec3 clusterCenter;
@@ -172,6 +224,19 @@ export const GALAXY_SHADER_PRESETS = {
     innerGlowIntensity: 2.5,
     outerGlowIntensity: 1.2,
     alphaFalloff: 2.5
+  } as GalaxyShaderOptions,
+
+  /** For galaxy groups - individual galaxies with orbital motion */
+  galaxyGroup: {
+    pulseFrequency: 2.2,
+    pulseAmplitude: 0.3,
+    pulseBase: 0.6,
+    positionFrequency: 0.12,
+    sizeScale: 280.0,
+    innerGlowIntensity: 2.8,
+    outerGlowIntensity: 1.4,
+    alphaFalloff: 2.2,
+    enableDualRotation: true
   } as GalaxyShaderOptions
 };
 
