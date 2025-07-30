@@ -4,6 +4,7 @@ import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { SeededRandom } from '@/lib/seededRandom';
+import { createGalaxyShaderMaterial, GALAXY_SHADER_PRESETS } from '@/shaders/galaxyShaders';
 
 interface GreatWall3DProps {
   ipSeed: number;
@@ -367,57 +368,8 @@ export function GreatWall3D({ ipSeed }: GreatWall3DProps) {
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(galaxyPointData.colors, 3));
     geometry.setAttribute('size', new THREE.Float32BufferAttribute(galaxyPointData.sizes, 1));
 
-    // Custom shader material for glowing points
-    const material = new THREE.ShaderMaterial({
-      uniforms: {
-        time: { value: 0 }
-      },
-      vertexShader: `
-        attribute float size;
-        varying vec3 vColor;
-        varying float vSize;
-        uniform float time;
-
-        void main() {
-          vColor = color;
-          vSize = size;
-
-          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-
-          // Add subtle animation based on time and position
-          float pulse = 0.8 + 0.2 * sin(time * 2.0 + position.x * 0.1 + position.y * 0.1);
-          gl_PointSize = size * pulse * (300.0 / -mvPosition.z);
-
-          gl_Position = projectionMatrix * mvPosition;
-        }
-      `,
-      fragmentShader: `
-        varying vec3 vColor;
-        varying float vSize;
-
-        void main() {
-          // Create circular point with soft edges
-          vec2 center = gl_PointCoord - vec2(0.5);
-          float dist = length(center);
-
-          // Soft circular falloff
-          float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
-
-          // Add inner glow
-          float innerGlow = 1.0 - smoothstep(0.0, 0.2, dist);
-          vec3 glowColor = vColor * (1.0 + innerGlow * 2.0);
-
-          // Fade out completely at edges
-          alpha *= alpha; // Square for softer edges
-
-          gl_FragColor = vec4(glowColor, alpha);
-        }
-      `,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      vertexColors: true
-    });
+    // Use shared galaxy shader with cosmic web preset
+    const material = createGalaxyShaderMaterial(GALAXY_SHADER_PRESETS.cosmicWeb);
 
     return new THREE.Points(geometry, material);
   }, [galaxyPointData]);
