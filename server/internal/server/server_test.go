@@ -13,6 +13,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Helper function to create a valid claim packet with proof of work
+func createValidClaimPacket(t *testing.T, targetIP net.IP, claimant string) []byte {
+	// Solve proof of work with difficulty 8 (base difficulty)
+	pow, err := api.SolveProofOfWork(targetIP, claimant, 8, 1000000)
+	require.NoError(t, err, "Should be able to solve proof of work")
+
+	// Create claim packet
+	pkt := &api.ClaimPacket{
+		Nonce:    pow.Nonce,
+		Claimant: claimant,
+	}
+
+	// Serialize the packet
+	data, err := pkt.Serialize()
+	require.NoError(t, err, "Should be able to serialize packet")
+
+	return data
+}
+
 // TestServerBasicFunctionality tests basic server start/stop functionality
 func TestServerBasicFunctionality(t *testing.T) {
 	// Use ephemeral ports for testing
@@ -147,8 +166,9 @@ func TestUDPClaimProcessing(t *testing.T) {
 	require.NoError(t, err, "UDP connection should be established")
 	defer conn.Close()
 
-	// Send a claim
-	claimData := []byte("testuser")
+	// Create a valid claim packet
+	targetIP := net.ParseIP("::1")
+	claimData := createValidClaimPacket(t, targetIP, "testuser")
 	_, err = conn.Write(claimData)
 	require.NoError(t, err, "UDP claim should be sent successfully")
 
@@ -529,7 +549,8 @@ func TestUDPServer_ClaimOverwrite(t *testing.T) {
 	defer conn.Close()
 
 	// Send first claim
-	firstClaim := []byte("firstuser")
+	targetIP := net.ParseIP("::1")
+	firstClaim := createValidClaimPacket(t, targetIP, "firstuser")
 	_, err = conn.Write(firstClaim)
 	require.NoError(t, err, "First claim should be sent successfully")
 
@@ -542,7 +563,15 @@ func TestUDPServer_ClaimOverwrite(t *testing.T) {
 	assert.Equal(t, "firstuser", claimant, "First claimant should match")
 
 	// Send second claim to overwrite the first
-	secondClaim := []byte("seconduser")
+	// Need higher difficulty (12) since address is already claimed (8 base + 4 claim bonus)
+	pow2, err := api.SolveProofOfWork(targetIP, "seconduser", 12, 1000000)
+	require.NoError(t, err, "Should be able to solve proof of work for overwrite")
+	pkt2 := &api.ClaimPacket{
+		Nonce:    pow2.Nonce,
+		Claimant: "seconduser",
+	}
+	secondClaim, err := pkt2.Serialize()
+	require.NoError(t, err, "Should be able to serialize second packet")
 	_, err = conn.Write(secondClaim)
 	require.NoError(t, err, "Second claim should be sent successfully")
 
