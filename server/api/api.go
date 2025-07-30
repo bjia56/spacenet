@@ -3,8 +3,8 @@ package api
 
 // ClaimResponse represents the JSON response for a claim
 type ClaimResponse struct {
-	IP       string `json:"ip"`
-	Claimant string `json:"claimant"`
+	Claimant   string `json:"claimant,omitempty"`
+	Difficulty uint8  `json:"difficulty,omitempty"`
 }
 
 // SubnetResponse represents the JSON response for subnet statistics

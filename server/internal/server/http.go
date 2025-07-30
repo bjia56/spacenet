@@ -60,11 +60,12 @@ func (h *HTTPHandler) handleGetClaimByIP(w http.ResponseWriter, r *http.Request)
 		json.NewEncoder(w).Encode(map[string]string{"error": "No claim found for this IP"})
 		return
 	}
+	difficulty := h.store.CalculateDifficulty(ipAddr)
 
 	w.Header().Set("Content-Type", "application/json")
 	response := api.ClaimResponse{
-		IP:       ipAddr,
-		Claimant: claimant,
+		Claimant:   claimant,
+		Difficulty: difficulty,
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {

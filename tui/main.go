@@ -13,7 +13,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/bjia56/gosendip"
 	"github.com/bjia56/spacenet/server/api"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/timer"
@@ -180,18 +179,62 @@ func Initialize(serverAddr string, httpPort, udpPort int, name string) *Model {
 	return m
 }
 
-// SendClaim sends a claim for an IP
+// SendClaim sends a proof of work claim for an IP
 func (m *Model) SendClaim(ip string) (string, error) {
-	// Build sendip args
-	args := []string{"-d", m.name, "-p", "ipv6", "-6s", ip, "-p", "udp", "-ud", fmt.Sprintf("%d", m.udpPort), m.serverAddr}
-
-	// Execute sendip command
-	rc, _ := gosendip.SendIP(args)
-	if rc != 0 {
-		return "", fmt.Errorf("failed to send claim for %s: exit code %d", ip, rc)
+	// Parse the IP to ensure it's valid
+	targetIP := net.ParseIP(ip)
+	if targetIP == nil {
+		return "", fmt.Errorf("invalid IP address: %s", ip)
 	}
 
-	return "Claim sent successfully!", nil
+	// Solve proof of work (limit to 10 million attempts)
+	pow, err := api.SolveProofOfWork(targetIP, m.name, 20, 10000000)
+	if err != nil {
+		return "", fmt.Errorf("failed to solve proof of work: %v", err)
+	}
+
+	// Create claim packet
+	packet := &api.ClaimPacket{
+		Nonce:    pow.Nonce,
+		Claimant: pow.Claimant,
+	}
+
+	// Serialize packet
+	data, err := packet.Serialize()
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize packet: %v", err)
+	}
+
+	// Send UDP packet to server
+	serverAddr := fmt.Sprintf("[%s]:%d", m.serverAddr, m.udpPort)
+	udpAddr, err := net.ResolveUDPAddr("udp", serverAddr)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve server address: %v", err)
+	}
+
+	conn, err := net.DialUDP("udp", nil, udpAddr)
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to server: %v", err)
+	}
+	defer conn.Close()
+
+	// Set source address to the IP we're claiming
+	localAddr := &net.UDPAddr{IP: targetIP, Port: 0}
+	localConn, err := net.DialUDP("udp", localAddr, udpAddr)
+	if err != nil {
+		// Fallback to regular connection if binding to specific IP fails
+		localConn = conn
+	} else {
+		conn.Close()
+		conn = localConn
+	}
+
+	_, err = conn.Write(data)
+	if err != nil {
+		return "", fmt.Errorf("failed to send packet: %v", err)
+	}
+
+	return fmt.Sprintf("Claim sent! Nonce: %d", pow.Nonce), nil
 }
 
 // PopulateTable populates a table with 2^16 rows
@@ -315,7 +358,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.statusMessage = statusMessageStyle.Render(msg)
 					m.errorMessage = ""
 				} else {
-					m.errorMessage = errorMessageStyle.Render("Failed to send claim")
+					m.errorMessage = errorMessageStyle.Render("Failed to send claim: " + err.Error())
 					m.statusMessage = ""
 				}
 			}
