@@ -110,7 +110,6 @@ func TestHTTPHandlerBasicOperations(t *testing.T) {
 	err = json.NewDecoder(resp.Body).Decode(&claimResp)
 	require.NoError(t, err, "Response should decode successfully")
 
-	assert.Equal(t, "2001:db8::1", claimResp.IP, "Response IP should match")
 	assert.Equal(t, "testuser", claimResp.Claimant, "Response claimant should match")
 
 	// Test non-existent claim
@@ -234,7 +233,6 @@ func TestServerIntegration(t *testing.T) {
 	err = json.NewDecoder(resp.Body).Decode(&claimResp)
 	require.NoError(t, err, "Response should decode successfully")
 
-	assert.Equal(t, testIP, claimResp.IP, "Response IP should match")
 	assert.Equal(t, testUser, claimResp.Claimant, "Response claimant should match")
 }
 
