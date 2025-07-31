@@ -146,7 +146,7 @@ float terrainHeight(
   }
 
   // Multiply by amplitude and adjust offset
-  return max(0.0, h + offset);
+  return max(offset, h + offset);
 }
 
 float blendedTerrainHeight(
@@ -173,7 +173,7 @@ float blendedTerrainHeight(
   float totalWeight = weight1 + weight2 + weight3;
   float blendedHeight = (h1 * weight1 + h2 * weight2 + h3 * weight3) / totalWeight;
 
-  return max(0.0, blendedHeight + offset);
+  return max(offset, blendedHeight + offset);
 }
 `;
 
@@ -572,7 +572,7 @@ export function Planet3D({ ipSeed }: Planet3DProps) {
       radius: 1,
       amplitude: ((terrainType == 2 ? 0.25 : 0.05) + rng.random() * 0.05),
       sharpness: 2.6,
-      offset: -0.01,
+      offset: 0.01, // Hide the weird glowing part opposite the light source
       period: 0.5 + rng.random() * 0.6,
       persistence: 0.5 + rng.random() * 0.05,
       lacunarity: 1.6 + rng.random() * 0.2,
