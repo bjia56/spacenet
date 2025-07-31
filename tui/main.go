@@ -10,12 +10,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
-	"unsafe"
 
 	"github.com/bjia56/spacenet/server/api"
 	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/bubbles/timer"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -79,44 +76,6 @@ func (ut *UnitTables) SetWidth(width int) {
 	}
 }
 
-// Animations
-type UnitAnimations [8]Animation
-
-func (ua *UnitAnimations) Initialize() {
-	*ua = UnitAnimations{
-		NewGreatWall(),
-		NewSupercluster(),
-		NewGalaxyGroup(),
-		NewGalaxy(),
-		NewStarCluster(),
-		NewSolarSystem(),
-		NewPlanet(),
-		NewCity(),
-	}
-}
-
-func (ua *UnitAnimations) SetDimensions(width, height int) {
-	for i := range ua {
-		ua[i].SetDimensions(width, height)
-	}
-}
-
-func (ua *UnitAnimations) Ticker() tea.Cmd {
-	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
-		return timer.TickMsg{ID: int(uintptr(unsafe.Pointer(ua)))}
-	})
-}
-
-func (ua *UnitAnimations) Update(msg tea.Msg, level level) tea.Cmd {
-	switch msg := msg.(type) {
-	case timer.TickMsg:
-		if msg.ID == int(uintptr(unsafe.Pointer(ua))) {
-			ua[level].Tick()
-			return ua.Ticker()
-		}
-	}
-	return nil
-}
 
 // Block granularity mappings
 var subnetMappings = [8]int{
@@ -141,8 +100,6 @@ type Model struct {
 	selections    [8]string  // Selected subnets for each table level
 	viewing       level
 	refreshClaims bool // Whether to refresh claims on the next update
-
-	animationModels UnitAnimations // Animation models for visualizations
 
 	statusMessage string
 	errorMessage  string
@@ -173,7 +130,6 @@ func Initialize(serverAddr string, httpPort int, name string) *Model {
 	m.unitTables.Initialize()
 	m.shadowTables.Initialize()
 	m.PopulateTable("", t16)
-	m.animationModels.Initialize()
 	return m
 }
 
@@ -303,10 +259,7 @@ func (m *Model) GetParentSelection(level level) string {
 
 // Init initializes the application
 func (m *Model) Init() tea.Cmd {
-	m.animationModels[m.viewing].AnimateForIP(net.IPv6zero)
-	return tea.Batch(
-		m.animationModels.Ticker(),
-	)
+	return nil
 }
 
 // Update handles user input and updates the model
@@ -317,8 +270,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		reserved := 6
 		m.unitTables.SetHeight(msg.Height - reserved)
-		m.unitTables.SetWidth((msg.Width / 2) - 2)
-		m.animationModels.SetDimensions(m.unitTables[0].Width(), m.unitTables[0].Height())
+		m.unitTables.SetWidth(msg.Width - 4)
 
 	case tea.KeyMsg:
 		m.statusMessage = ""
@@ -367,15 +319,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshClaims = true // Refresh claims if cursor changed
 	}
 
-	ip := strings.Split(m.shadowTables[m.viewing].Rows()[newCursor][0], "/")[0]
-	ipv6 := net.ParseIP(ip)
-	m.animationModels[m.viewing].AnimateForIP(ipv6)
-
-	// Update the animation model
-	if cmd := m.animationModels.Update(msg, m.viewing); cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
 	return m, tea.Batch(cmds...)
 }
 
@@ -393,11 +336,7 @@ func (m *Model) View() string {
 	}
 
 	return titleStyle.Render("SpaceNet Browser") + "\n\n" +
-		lipgloss.JoinHorizontal(
-			lipgloss.Bottom,
-			tableStyle.Render(m.unitTables[m.viewing].View()),
-			tableStyle.Render(m.animationModels[m.viewing].View()),
-		) + "\n" + msg + "\n" +
+		tableStyle.Render(m.unitTables[m.viewing].View()) + "\n" + msg + "\n" +
 		helpStyle("enter: select subnet, esc: back, q: quit")
 }
 
