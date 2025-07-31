@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 // Helper function to make HTTP claim request with proof of work
 func makeHTTPClaimRequest(t *testing.T, baseURL, targetIP, claimant string, difficulty uint8) *http.Response {
 	// Solve proof of work
@@ -23,7 +22,6 @@ func makeHTTPClaimRequest(t *testing.T, baseURL, targetIP, claimant string, diff
 
 	// Create claim request
 	claimReq := api.ClaimRequest{
-		IP:       targetIP,
 		Nonce:    pow.Nonce,
 		Claimant: claimant,
 	}
@@ -33,7 +31,7 @@ func makeHTTPClaimRequest(t *testing.T, baseURL, targetIP, claimant string, diff
 	require.NoError(t, err, "Should be able to marshal claim request")
 
 	// Make HTTP request
-	resp, err := http.Post(fmt.Sprintf("%s/api/claim", baseURL), "application/json", bytes.NewBuffer(reqBody))
+	resp, err := http.Post(fmt.Sprintf("%s/api/claim/%s", baseURL, targetIP), "application/json", bytes.NewBuffer(reqBody))
 	require.NoError(t, err, "HTTP claim request should succeed")
 
 	return resp
@@ -259,11 +257,6 @@ func TestHTTPHandler_InvalidIPAddress(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Invalid IP should return 400")
-
-	var errorResp map[string]string
-	err = json.NewDecoder(resp.Body).Decode(&errorResp)
-	require.NoError(t, err, "Error response should decode")
-	assert.Contains(t, errorResp["error"], "Invalid IP address format")
 }
 
 // TestHTTPHandler_SubnetStats tests subnet statistics endpoint
@@ -323,11 +316,6 @@ func TestHTTPHandler_InvalidSubnet(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Invalid subnet should return 400")
-
-	var errorResp map[string]string
-	err = json.NewDecoder(resp.Body).Decode(&errorResp)
-	require.NoError(t, err, "Error response should decode")
-	assert.Contains(t, errorResp["error"], "Invalid subnet format")
 }
 
 // TestHTTPServer_InvalidPayload tests handling of invalid HTTP payloads
@@ -346,14 +334,14 @@ func TestHTTPServer_InvalidPayload(t *testing.T) {
 	baseURL := fmt.Sprintf("http://localhost:%d", httpPort)
 
 	// Test empty payload
-	resp, err := http.Post(fmt.Sprintf("%s/api/claim", baseURL), "application/json", bytes.NewBuffer([]byte{}))
+	resp, err := http.Post(fmt.Sprintf("%s/api/claim/2001:db8::1", baseURL), "application/json", bytes.NewBuffer([]byte{}))
 	require.NoError(t, err, "Empty HTTP payload should be sent")
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Empty payload should return 400")
 
 	// Test invalid JSON
-	resp, err = http.Post(fmt.Sprintf("%s/api/claim", baseURL), "application/json", bytes.NewBuffer([]byte("invalid json")))
+	resp, err = http.Post(fmt.Sprintf("%s/api/claim/2001:db8::1", baseURL), "application/json", bytes.NewBuffer([]byte("invalid json")))
 	require.NoError(t, err, "Invalid JSON should be sent")
 	defer resp.Body.Close()
 
@@ -386,7 +374,6 @@ func TestHTTPServer_PayloadValidation(t *testing.T) {
 	}
 
 	claimReq := api.ClaimRequest{
-		IP:       "2001:db8::1",
 		Nonce:    12345,
 		Claimant: string(longClaimant),
 	}
@@ -394,15 +381,14 @@ func TestHTTPServer_PayloadValidation(t *testing.T) {
 	reqBody, err := json.Marshal(claimReq)
 	require.NoError(t, err, "Should be able to marshal request")
 
-	resp, err := http.Post(fmt.Sprintf("%s/api/claim", baseURL), "application/json", bytes.NewBuffer(reqBody))
+	resp, err := http.Post(fmt.Sprintf("%s/api/claim/2001:db8::1", baseURL), "application/json", bytes.NewBuffer(reqBody))
 	require.NoError(t, err, "Request should be sent")
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Oversized claimant should return 400")
 
-	// Test invalid IP address
+	// Test invalid IP address in path
 	claimReq = api.ClaimRequest{
-		IP:       "invalid-ip",
 		Nonce:    12345,
 		Claimant: "testuser",
 	}
@@ -410,7 +396,7 @@ func TestHTTPServer_PayloadValidation(t *testing.T) {
 	reqBody, err = json.Marshal(claimReq)
 	require.NoError(t, err, "Should be able to marshal request")
 
-	resp, err = http.Post(fmt.Sprintf("%s/api/claim", baseURL), "application/json", bytes.NewBuffer(reqBody))
+	resp, err = http.Post(fmt.Sprintf("%s/api/claim/invalid-ip", baseURL), "application/json", bytes.NewBuffer(reqBody))
 	require.NoError(t, err, "Request should be sent")
 	defer resp.Body.Close()
 

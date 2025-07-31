@@ -15,7 +15,6 @@ type SubnetResponse struct {
 
 // ClaimRequest represents a request to claim an IPv6 address
 type ClaimRequest struct {
-	IP       string `json:"ip"`
 	Nonce    uint64 `json:"nonce"`
 	Claimant string `json:"claimant"`
 }

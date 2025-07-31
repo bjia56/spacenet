@@ -26,7 +26,7 @@ func NewHTTPHandler(store Store) *HTTPHandler {
 func (h *HTTPHandler) RegisterRoutes(router *mux.Router) {
 	router.HandleFunc("/api/ip/{ip}", h.handleGetClaimByIP).Methods("GET")
 	router.HandleFunc("/api/subnet/{address}/{prefix}", h.handleGetStatsBySubnet).Methods("GET")
-	router.HandleFunc("/api/claim", h.handleSubmitClaim).Methods("POST")
+	router.HandleFunc("/api/claim/{ip}", h.handleSubmitClaim).Methods("POST")
 	router.HandleFunc("/health", h.handleHealth).Methods("GET")
 }
 
@@ -34,7 +34,6 @@ func (h *HTTPHandler) RegisterRoutes(router *mux.Router) {
 func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 // handleGetClaimByIP returns the claim for a specific IP
@@ -44,21 +43,18 @@ func (h *HTTPHandler) handleGetClaimByIP(w http.ResponseWriter, r *http.Request)
 	ipAddr, ok := vars["ip"]
 	if !ok || ipAddr == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "IP address is required"})
 		return
 	}
 
 	// Validate the IP address
 	if net.ParseIP(ipAddr) == nil {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid IP address format"})
 		return
 	}
 
 	claimant, exists := h.store.GetClaim(ipAddr)
 	if !exists {
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": "No claim found for this IP"})
 		return
 	}
 	difficulty := h.store.CalculateDifficulty(ipAddr)
@@ -89,7 +85,6 @@ func (h *HTTPHandler) handleGetStatsBySubnet(w http.ResponseWriter, r *http.Requ
 	stats, ok := h.store.GetSubnetStats(subnetStr)
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid subnet format, use CIDR notation (e.g., 2001:db8::/64)"})
 		return
 	}
 
@@ -106,16 +101,24 @@ func (h *HTTPHandler) handleGetStatsBySubnet(w http.ResponseWriter, r *http.Requ
 
 // handleSubmitClaim handles claim submission via HTTP POST
 func (h *HTTPHandler) handleSubmitClaim(w http.ResponseWriter, r *http.Request) {
-	// Parse JSON request body
-	var claimReq api.ClaimRequest
-	if err := json.NewDecoder(r.Body).Decode(&claimReq); err != nil {
+	// Extract IP from URL path
+	vars := mux.Vars(r)
+	ipAddr, ok := vars["ip"]
+	if !ok || ipAddr == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	// Validate IP address
-	targetIP := net.ParseIP(claimReq.IP)
+	targetIP := net.ParseIP(ipAddr)
 	if targetIP == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Parse JSON request body
+	var claimReq api.ClaimRequest
+	if err := json.NewDecoder(r.Body).Decode(&claimReq); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -140,7 +143,7 @@ func (h *HTTPHandler) handleSubmitClaim(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Process the claim
-	err := h.store.ProcessClaim(claimReq.IP, claimReq.Claimant)
+	err := h.store.ProcessClaim(ipAddr, claimReq.Claimant)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
