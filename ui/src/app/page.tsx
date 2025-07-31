@@ -5,7 +5,6 @@ export default function Home() {
     <SpaceNetBrowser
       serverAddr="::1"
       httpPort={8080}
-      udpPort={1337}
       playerName="Anonymous"
     />
   );
