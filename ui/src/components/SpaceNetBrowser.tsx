@@ -18,14 +18,12 @@ export interface SubnetRow {
 interface SpaceNetBrowserProps {
   serverAddr: string;
   httpPort: number;
-  udpPort: number;
   playerName: string;
 }
 
 export function SpaceNetBrowser({
   serverAddr,
   httpPort,
-  udpPort,
   playerName
 }: SpaceNetBrowserProps) {
   const [currentLevel, setCurrentLevel] = useState<SubnetLevel>(0);
@@ -101,8 +99,8 @@ export function SpaceNetBrowser({
   // Send claim to server
   const sendClaim = async (ip: string) => {
     try {
-      // In a real implementation, this would use the gosendip equivalent
-      // For now, just make HTTP request to claim endpoint
+      // TODO: Implement proof-of-work solving in browser
+      // For now, use a placeholder nonce - this will fail validation
       const response = await fetch(`http://[${serverAddr}]:${httpPort}/api/claim`, {
         method: 'POST',
         headers: {
@@ -110,18 +108,22 @@ export function SpaceNetBrowser({
         },
         body: JSON.stringify({
           ip,
-          name: playerName
+          nonce: 0, // TODO: Solve proof-of-work to get valid nonce
+          claimant: playerName
         })
       });
 
-      if (response.ok) {
+      if (response.status === 201) {
         setStatusMessage('Claim sent successfully!');
         setErrorMessage('');
+      } else if (response.status === 422) {
+        setErrorMessage('Invalid proof of work - browser PoW not implemented yet');
+        setStatusMessage('');
       } else {
-        throw new Error('Failed to send claim');
+        throw new Error(`Server returned status: ${response.status}`);
       }
     } catch (error) {
-      setErrorMessage('Failed to send claim');
+      setErrorMessage('Failed to send claim: ' + (error as Error).message);
       setStatusMessage('');
     }
   };

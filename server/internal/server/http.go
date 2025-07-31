@@ -26,6 +26,7 @@ func NewHTTPHandler(store Store) *HTTPHandler {
 func (h *HTTPHandler) RegisterRoutes(router *mux.Router) {
 	router.HandleFunc("/api/ip/{ip}", h.handleGetClaimByIP).Methods("GET")
 	router.HandleFunc("/api/subnet/{address}/{prefix}", h.handleGetStatsBySubnet).Methods("GET")
+	router.HandleFunc("/api/claim", h.handleSubmitClaim).Methods("POST")
 	router.HandleFunc("/health", h.handleHealth).Methods("GET")
 }
 
@@ -101,4 +102,50 @@ func (h *HTTPHandler) handleGetStatsBySubnet(w http.ResponseWriter, r *http.Requ
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+}
+
+// handleSubmitClaim handles claim submission via HTTP POST
+func (h *HTTPHandler) handleSubmitClaim(w http.ResponseWriter, r *http.Request) {
+	// Parse JSON request body
+	var claimReq api.ClaimRequest
+	if err := json.NewDecoder(r.Body).Decode(&claimReq); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Validate IP address
+	targetIP := net.ParseIP(claimReq.IP)
+	if targetIP == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Validate claimant name
+	if len(claimReq.Claimant) == 0 || len(claimReq.Claimant) > 24 {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Create proof of work object
+	pow := &api.ProofOfWork{
+		Target:   targetIP,
+		Claimant: claimReq.Claimant,
+		Nonce:    claimReq.Nonce,
+	}
+
+	// Validate proof of work
+	if err := h.store.ValidateProofOfWork(pow); err != nil {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
+
+	// Process the claim
+	err := h.store.ProcessClaim(claimReq.IP, claimReq.Claimant)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// Return success with no content
+	w.WriteHeader(http.StatusCreated)
 }

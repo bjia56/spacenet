@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -13,31 +14,36 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Helper function to create a valid claim packet with proof of work
-func createValidClaimPacket(t *testing.T, targetIP net.IP, claimant string) []byte {
-	// Solve proof of work with difficulty 8 (base difficulty)
-	pow, err := api.SolveProofOfWork(targetIP, claimant, 8, 1000000)
+
+// Helper function to make HTTP claim request with proof of work
+func makeHTTPClaimRequest(t *testing.T, baseURL, targetIP, claimant string, difficulty uint8) *http.Response {
+	// Solve proof of work
+	pow, err := api.SolveProofOfWork(net.ParseIP(targetIP), claimant, difficulty, 1000000)
 	require.NoError(t, err, "Should be able to solve proof of work")
 
-	// Create claim packet
-	pkt := &api.ClaimPacket{
+	// Create claim request
+	claimReq := api.ClaimRequest{
+		IP:       targetIP,
 		Nonce:    pow.Nonce,
 		Claimant: claimant,
 	}
 
-	// Serialize the packet
-	data, err := pkt.Serialize()
-	require.NoError(t, err, "Should be able to serialize packet")
+	// Serialize request
+	reqBody, err := json.Marshal(claimReq)
+	require.NoError(t, err, "Should be able to marshal claim request")
 
-	return data
+	// Make HTTP request
+	resp, err := http.Post(fmt.Sprintf("%s/api/claim", baseURL), "application/json", bytes.NewBuffer(reqBody))
+	require.NoError(t, err, "HTTP claim request should succeed")
+
+	return resp
 }
 
 // TestServerBasicFunctionality tests basic server start/stop functionality
 func TestServerBasicFunctionality(t *testing.T) {
 	// Use ephemeral ports for testing
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0, // Port 0 will assign an available port
-		HTTPPort: 0, // Also use ephemeral port for HTTP
+		HTTPPort: 0, // Use ephemeral port for HTTP
 	})
 
 	// Test server creation
@@ -92,7 +98,6 @@ func TestClaimStoreBasicOperations(t *testing.T) {
 func TestHTTPHandlerBasicOperations(t *testing.T) {
 	// Create a server with ephemeral ports
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -139,11 +144,10 @@ func TestHTTPHandlerBasicOperations(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "Non-existent claim should return 404")
 }
 
-// TestUDPClaimProcessing tests UDP claim processing functionality
-func TestUDPClaimProcessing(t *testing.T) {
+// TestHTTPClaimProcessing tests HTTP claim processing functionality
+func TestHTTPClaimProcessing(t *testing.T) {
 	// Create server with ephemeral ports
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -152,45 +156,24 @@ func TestUDPClaimProcessing(t *testing.T) {
 	require.NoError(t, err, "Server should start successfully")
 	defer server.Stop()
 
-	// Wait for UDP port to be assigned
-	udpPort, err := server.WaitForUDPPort(5 * time.Second)
-	require.NoError(t, err, "UDP port should be assigned within timeout")
+	// Wait for HTTP port to be assigned
+	httpPort, err := server.WaitForHTTPPort(5 * time.Second)
+	require.NoError(t, err, "HTTP port should be assigned within timeout")
 
-	// Create UDP client
-	serverAddr := &net.UDPAddr{
-		IP:   net.ParseIP("::1"),
-		Port: udpPort,
-	}
+	baseURL := fmt.Sprintf("http://localhost:%d", httpPort)
 
-	conn, err := net.DialUDP("udp", nil, serverAddr)
-	require.NoError(t, err, "UDP connection should be established")
-	defer conn.Close()
+	// Make HTTP claim request
+	targetIP := "2001:db8::1"
+	resp := makeHTTPClaimRequest(t, baseURL, targetIP, "testuser", 8)
+	defer resp.Body.Close()
 
-	// Create a valid claim packet
-	targetIP := net.ParseIP("::1")
-	claimData := createValidClaimPacket(t, targetIP, "testuser")
-	_, err = conn.Write(claimData)
-	require.NoError(t, err, "UDP claim should be sent successfully")
-
-	// Give server time to process the claim
-	time.Sleep(200 * time.Millisecond)
+	// Verify claim was accepted
+	assert.Equal(t, http.StatusCreated, resp.StatusCode, "HTTP claim should return 201 Created")
 
 	// Verify the claim was processed by checking the store
-	// Note: We need to get the client's IPv6 address that the server saw
-	// For testing purposes, we'll check if any claims were added
-	allClaims := server.store.GetAllClaims()
-	assert.NotEmpty(t, allClaims, "At least one claim should be processed")
-
-	// Verify that one of the claims has our claimant name
-	found := false
-	for _, claimant := range allClaims {
-		if claimant == "testuser" {
-			found = true
-			break
-		}
-	}
-
-	assert.True(t, found, "Should find claim from 'testuser'")
+	claimant, exists := server.store.GetClaim(targetIP)
+	assert.True(t, exists, "Claim should exist in store")
+	assert.Equal(t, "testuser", claimant, "Claimant should match")
 }
 
 // TestSubnetStats tests basic subnet statistics functionality
@@ -222,7 +205,6 @@ func TestSubnetStats(t *testing.T) {
 func TestServerIntegration(t *testing.T) {
 	// Create server
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -259,7 +241,6 @@ func TestServerIntegration(t *testing.T) {
 // TestHTTPHandler_InvalidIPAddress tests error handling for invalid IP addresses
 func TestHTTPHandler_InvalidIPAddress(t *testing.T) {
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -288,7 +269,6 @@ func TestHTTPHandler_InvalidIPAddress(t *testing.T) {
 // TestHTTPHandler_SubnetStats tests subnet statistics endpoint
 func TestHTTPHandler_SubnetStats(t *testing.T) {
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -325,7 +305,6 @@ func TestHTTPHandler_SubnetStats(t *testing.T) {
 // TestHTTPHandler_InvalidSubnet tests error handling for invalid subnet format
 func TestHTTPHandler_InvalidSubnet(t *testing.T) {
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -351,10 +330,9 @@ func TestHTTPHandler_InvalidSubnet(t *testing.T) {
 	assert.Contains(t, errorResp["error"], "Invalid subnet format")
 }
 
-// TestUDPServer_EmptyPayload tests handling of empty UDP payloads
-func TestUDPServer_EmptyPayload(t *testing.T) {
+// TestHTTPServer_InvalidPayload tests handling of invalid HTTP payloads
+func TestHTTPServer_InvalidPayload(t *testing.T) {
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -362,35 +340,33 @@ func TestUDPServer_EmptyPayload(t *testing.T) {
 	require.NoError(t, err, "Server should start successfully")
 	defer server.Stop()
 
-	udpPort, err := server.WaitForUDPPort(5 * time.Second)
-	require.NoError(t, err, "UDP port should be assigned within timeout")
+	httpPort, err := server.WaitForHTTPPort(5 * time.Second)
+	require.NoError(t, err, "HTTP port should be assigned within timeout")
 
-	// Create UDP client
-	serverAddr := &net.UDPAddr{
-		IP:   net.ParseIP("::1"),
-		Port: udpPort,
-	}
+	baseURL := fmt.Sprintf("http://localhost:%d", httpPort)
 
-	conn, err := net.DialUDP("udp", nil, serverAddr)
-	require.NoError(t, err, "UDP connection should be established")
-	defer conn.Close()
+	// Test empty payload
+	resp, err := http.Post(fmt.Sprintf("%s/api/claim", baseURL), "application/json", bytes.NewBuffer([]byte{}))
+	require.NoError(t, err, "Empty HTTP payload should be sent")
+	defer resp.Body.Close()
 
-	// Send empty payload
-	_, err = conn.Write([]byte{})
-	require.NoError(t, err, "Empty UDP payload should be sent")
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Empty payload should return 400")
 
-	// Give server time to process
-	time.Sleep(200 * time.Millisecond)
+	// Test invalid JSON
+	resp, err = http.Post(fmt.Sprintf("%s/api/claim", baseURL), "application/json", bytes.NewBuffer([]byte("invalid json")))
+	require.NoError(t, err, "Invalid JSON should be sent")
+	defer resp.Body.Close()
 
-	// Verify no claims were added (empty payloads should be ignored)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Invalid JSON should return 400")
+
+	// Verify no claims were added (invalid payloads should be rejected)
 	allClaims := server.store.GetAllClaims()
-	assert.Empty(t, allClaims, "Empty payload should not create claims")
+	assert.Empty(t, allClaims, "Invalid payloads should not create claims")
 }
 
-// TestUDPServer_OversizedPayload tests handling of oversized UDP payloads
-func TestUDPServer_OversizedPayload(t *testing.T) {
+// TestHTTPServer_PayloadValidation tests HTTP payload validation
+func TestHTTPServer_PayloadValidation(t *testing.T) {
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -398,49 +374,61 @@ func TestUDPServer_OversizedPayload(t *testing.T) {
 	require.NoError(t, err, "Server should start successfully")
 	defer server.Stop()
 
-	udpPort, err := server.WaitForUDPPort(5 * time.Second)
-	require.NoError(t, err, "UDP port should be assigned within timeout")
+	httpPort, err := server.WaitForHTTPPort(5 * time.Second)
+	require.NoError(t, err, "HTTP port should be assigned within timeout")
 
-	// Create UDP client
-	serverAddr := &net.UDPAddr{
-		IP:   net.ParseIP("::1"),
-		Port: udpPort,
+	baseURL := fmt.Sprintf("http://localhost:%d", httpPort)
+
+	// Test oversized claimant name (> 24 characters)
+	longClaimant := make([]byte, 30)
+	for i := range longClaimant {
+		longClaimant[i] = 'A'
 	}
 
-	conn, err := net.DialUDP("udp", nil, serverAddr)
-	require.NoError(t, err, "UDP connection should be established")
-	defer conn.Close()
-
-	// Send oversized payload (> 32 bytes)
-	oversizedPayload := make([]byte, 64)
-	for i := range oversizedPayload {
-		oversizedPayload[i] = 'A'
+	claimReq := api.ClaimRequest{
+		IP:       "2001:db8::1",
+		Nonce:    12345,
+		Claimant: string(longClaimant),
 	}
 
-	_, err = conn.Write(oversizedPayload)
-	require.NoError(t, err, "Oversized UDP payload should be sent")
+	reqBody, err := json.Marshal(claimReq)
+	require.NoError(t, err, "Should be able to marshal request")
 
-	// Give server time to process
-	time.Sleep(200 * time.Millisecond)
+	resp, err := http.Post(fmt.Sprintf("%s/api/claim", baseURL), "application/json", bytes.NewBuffer(reqBody))
+	require.NoError(t, err, "Request should be sent")
+	defer resp.Body.Close()
 
-	// Verify no claims were added (oversized payloads should be ignored)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Oversized claimant should return 400")
+
+	// Test invalid IP address
+	claimReq = api.ClaimRequest{
+		IP:       "invalid-ip",
+		Nonce:    12345,
+		Claimant: "testuser",
+	}
+
+	reqBody, err = json.Marshal(claimReq)
+	require.NoError(t, err, "Should be able to marshal request")
+
+	resp, err = http.Post(fmt.Sprintf("%s/api/claim", baseURL), "application/json", bytes.NewBuffer(reqBody))
+	require.NoError(t, err, "Request should be sent")
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Invalid IP should return 400")
+
+	// Verify no claims were added
 	allClaims := server.store.GetAllClaims()
-	assert.Empty(t, allClaims, "Oversized payload should not create claims")
+	assert.Empty(t, allClaims, "Invalid payloads should not create claims")
 }
 
 // TestServerPortTimeout tests timeout behavior for port assignment
 func TestServerPortTimeout(t *testing.T) {
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
 	// Test timeout without starting server
-	_, err := server.WaitForUDPPort(100 * time.Millisecond)
-	assert.Error(t, err, "Should timeout when server not started")
-	assert.Contains(t, err.Error(), "timeout waiting for UDP port")
-
-	_, err = server.WaitForHTTPPort(100 * time.Millisecond)
+	_, err := server.WaitForHTTPPort(100 * time.Millisecond)
 	assert.Error(t, err, "Should timeout when server not started")
 	assert.Contains(t, err.Error(), "timeout waiting for HTTP port")
 }
@@ -448,18 +436,13 @@ func TestServerPortTimeout(t *testing.T) {
 // TestServerStop_Graceful tests graceful server shutdown
 func TestServerStop_Graceful(t *testing.T) {
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
 	err := server.Start()
 	require.NoError(t, err, "Server should start successfully")
 
-	// Verify both ports are assigned
-	udpPort, err := server.WaitForUDPPort(2 * time.Second)
-	require.NoError(t, err, "UDP port should be assigned")
-	assert.Greater(t, udpPort, 0, "UDP port should be positive")
-
+	// Verify HTTP port is assigned
 	httpPort, err := server.WaitForHTTPPort(2 * time.Second)
 	require.NoError(t, err, "HTTP port should be assigned")
 	assert.Greater(t, httpPort, 0, "HTTP port should be positive")
@@ -476,7 +459,6 @@ func TestServerStop_Graceful(t *testing.T) {
 	assert.Error(t, err, "HTTP server should be stopped")
 
 	// The main verification is that Stop() completed gracefully without hanging
-	// UDP writes would always succeed due to connectionless nature, so HTTP check is sufficient
 }
 
 // TestClaimStore_ConcurrentAccess tests concurrent access to claim store
@@ -520,14 +502,13 @@ func TestNewServerWithOptions_DefaultValues(t *testing.T) {
 	// Verify server has required components
 	assert.NotNil(t, server.store, "Server should have a store")
 	assert.NotNil(t, server.httpHandler, "Server should have HTTP handler")
-	assert.NotNil(t, server.udpPortReady, "Server should have UDP port channel")
+	// UDP functionality removed - no UDP port channel expected
 	assert.NotNil(t, server.httpPortReady, "Server should have HTTP port channel")
 }
 
-// TestUDPServer_ClaimOverwrite tests that UDP server properly handles claim overwrites
-func TestUDPServer_ClaimOverwrite(t *testing.T) {
+// TestHTTPServer_ClaimOverwrite tests that HTTP server properly handles claim overwrites
+func TestHTTPServer_ClaimOverwrite(t *testing.T) {
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -535,51 +516,30 @@ func TestUDPServer_ClaimOverwrite(t *testing.T) {
 	require.NoError(t, err, "Server should start successfully")
 	defer server.Stop()
 
-	udpPort, err := server.WaitForUDPPort(5 * time.Second)
-	require.NoError(t, err, "UDP port should be assigned within timeout")
+	httpPort, err := server.WaitForHTTPPort(5 * time.Second)
+	require.NoError(t, err, "HTTP port should be assigned within timeout")
 
-	// Create UDP client
-	serverAddr := &net.UDPAddr{
-		IP:   net.ParseIP("::1"),
-		Port: udpPort,
-	}
+	baseURL := fmt.Sprintf("http://localhost:%d", httpPort)
+	targetIP := "2001:db8::1"
 
-	conn, err := net.DialUDP("udp", nil, serverAddr)
-	require.NoError(t, err, "UDP connection should be established")
-	defer conn.Close()
-
-	// Send first claim
-	targetIP := net.ParseIP("::1")
-	firstClaim := createValidClaimPacket(t, targetIP, "firstuser")
-	_, err = conn.Write(firstClaim)
-	require.NoError(t, err, "First claim should be sent successfully")
-
-	// Give server time to process
-	time.Sleep(200 * time.Millisecond)
+	// Send first claim with base difficulty (8)
+	resp := makeHTTPClaimRequest(t, baseURL, targetIP, "firstuser", 8)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp.StatusCode, "First claim should be accepted")
 
 	// Verify first claim was processed
-	claimant, exists := server.store.GetClaim("::1")
+	claimant, exists := server.store.GetClaim(targetIP)
 	assert.True(t, exists, "First claim should exist")
 	assert.Equal(t, "firstuser", claimant, "First claimant should match")
 
 	// Send second claim to overwrite the first
 	// Need higher difficulty (12) since address is already claimed (8 base + 4 claim bonus)
-	pow2, err := api.SolveProofOfWork(targetIP, "seconduser", 12, 1000000)
-	require.NoError(t, err, "Should be able to solve proof of work for overwrite")
-	pkt2 := &api.ClaimPacket{
-		Nonce:    pow2.Nonce,
-		Claimant: "seconduser",
-	}
-	secondClaim, err := pkt2.Serialize()
-	require.NoError(t, err, "Should be able to serialize second packet")
-	_, err = conn.Write(secondClaim)
-	require.NoError(t, err, "Second claim should be sent successfully")
-
-	// Give server time to process
-	time.Sleep(200 * time.Millisecond)
+	resp = makeHTTPClaimRequest(t, baseURL, targetIP, "seconduser", 12)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp.StatusCode, "Second claim should be accepted")
 
 	// Verify claim was overwritten
-	claimant, exists = server.store.GetClaim("::1")
+	claimant, exists = server.store.GetClaim(targetIP)
 	assert.True(t, exists, "Overwritten claim should exist")
 	assert.Equal(t, "seconduser", claimant, "Claimant should be updated to second user")
 
