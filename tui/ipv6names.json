@@ -3,42 +3,58 @@
     "16": [
       "Absolute", "Boundless", "Colossal", "Cosmic", "Eternal", "Fundamental",
       "Infinite", "Interstellar", "Limitless", "Paramount", "Primordial", "Universal",
-      "Ultimate", "Vast", "Celestial", "Omnipotent", "Singular", "Supreme"
+      "Ultimate", "Vast", "Celestial", "Omnipotent", "Singular", "Supreme",
+      "Immeasurable", "Transcendent", "Omniversal", "Immutable", "Perpetual", "Timeless",
+      "Encompassing", "All-Pervading", "Superlative", "Archetypal", "Essential", "Perfect"
     ],
     "32": [
       "Abundant", "Ascending", "Binding", "Dynamic", "Endless", "Fundamental",
       "Grand", "Hyperion", "Imperial", "Majestic", "Sovereign", "Stellar",
-      "Sublime", "Unified", "Dominant", "Mammoth", "Massive"
+      "Sublime", "Unified", "Dominant", "Mammoth", "Massive",
+      "Towering", "Regal", "Magnificent", "Colossal", "Gigantic", "Commanding",
+      "Overwhelming", "Imposing", "Monumental", "Formidable", "Glorious", "Mighty"
     ],
     "48": [
       "Abundant", "Clustered", "Collective", "Connected", "Flowing", "Gathering",
       "Harmonious", "Linked", "Networked", "Streaming", "Unified", "United",
-      "Woven", "Bound", "Converging", "Joined"
+      "Woven", "Bound", "Converging", "Joined",
+      "Interwoven", "Synchronized", "Orchestrated", "Collaborative", "Interlinked", "Cascading",
+      "Resonant", "Symbiotic", "Coordinated", "Integrated", "Merged", "Bridged"
     ],
     "64": [
       "Astral", "Blazing", "Brilliant", "Luminous", "Nebulous", "Radiant",
       "Shining", "Spiraling", "Stellar", "Swirling", "Whirling", "Rotating",
-      "Galactic", "Cosmic", "Starborn", "Celestial"
+      "Galactic", "Cosmic", "Starborn", "Celestial",
+      "Iridescent", "Gleaming", "Incandescent", "Prismatic", "Phosphorescent", "Opalescent",
+      "Coruscating", "Effervescent", "Lustrous", "Pearlescent", "Shimmering", "Scintillant"
     ],
     "80": [
       "Burning", "Flaring", "Gleaming", "Glowing", "Golden", "Illuminated",
       "Lucent", "Pulsing", "Radiating", "Scintillating", "Twinkling", "Bright",
-      "Dazzling", "Effulgent", "Starlit"
+      "Dazzling", "Effulgent", "Starlit",
+      "Blazing", "Flickering", "Smoldering", "Flashing", "Beaming", "Glimmering",
+      "Sparkling", "Lambent", "Luminescent", "Coruscant", "Refulgent", "Candescent"
     ],
     "96": [
       "Balanced", "Circular", "Gravitational", "Harmonious", "Orbital", "Planetary",
       "Revolving", "Solar", "Synchronous", "Systematic", "Aligned", "Cyclic",
-      "Ecliptic", "Ordered"
+      "Ecliptic", "Ordered",
+      "Elliptical", "Perihelion", "Aphelion", "Heliocentric", "Centripetal", "Rotational",
+      "Meridional", "Celestial", "Equatorial", "Polar", "Axial", "Geodetic"
     ],
     "112": [
       "Azure", "Crystalline", "Emerald", "Frozen", "Gaseous", "Molten",
       "Obsidian", "Rocky", "Sapphire", "Terrestrial", "Tropical", "Verdant",
-      "Violet", "Volcanic", "Windswept", "Crimson"
+      "Violet", "Volcanic", "Windswept", "Crimson",
+      "Amber", "Cerulean", "Titanium", "Cobalt", "Platinum", "Diamond",
+      "Onyx", "Jade", "Ruby", "Opal", "Quartz", "Granite", "Basalt", "Marble"
     ],
     "128": [
       "Ancient", "Bustling", "Colonial", "Fortified", "Hidden", "Industrial",
       "Metropolitan", "Noble", "Prosperous", "Rising", "Sacred", "Thriving",
-      "Urban", "Vibrant", "Wealthy", "Established"
+      "Urban", "Vibrant", "Wealthy", "Established",
+      "Majestic", "Peaceful", "Advanced", "Historic", "Cultural", "Artistic",
+      "Scientific", "Commercial", "Residential", "Academic", "Diplomatic", "Ceremonial"
     ]
   },
   "nouns": {
