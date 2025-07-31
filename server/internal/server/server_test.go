@@ -22,8 +22,8 @@ func makeHTTPClaimRequest(t *testing.T, baseURL, targetIP, claimant string, diff
 
 	// Create claim request
 	claimReq := api.ClaimRequest{
-		Nonce:    pow.Nonce,
-		Claimant: claimant,
+		Nonce: pow.Nonce,
+		Name:  claimant,
 	}
 
 	// Serialize request
@@ -132,7 +132,7 @@ func TestHTTPHandlerBasicOperations(t *testing.T) {
 	err = json.NewDecoder(resp.Body).Decode(&claimResp)
 	require.NoError(t, err, "Response should decode successfully")
 
-	assert.Equal(t, "testuser", claimResp.Claimant, "Response claimant should match")
+	assert.Equal(t, "testuser", claimResp.Name, "Response claimant should match")
 
 	// Test non-existent claim
 	resp, err = http.Get(fmt.Sprintf("%s/api/ip/2001:db8::999", baseURL))
@@ -233,7 +233,7 @@ func TestServerIntegration(t *testing.T) {
 	err = json.NewDecoder(resp.Body).Decode(&claimResp)
 	require.NoError(t, err, "Response should decode successfully")
 
-	assert.Equal(t, testUser, claimResp.Claimant, "Response claimant should match")
+	assert.Equal(t, testUser, claimResp.Name, "Response claimant should match")
 }
 
 // TestHTTPHandler_InvalidIPAddress tests error handling for invalid IP addresses
@@ -374,8 +374,8 @@ func TestHTTPServer_PayloadValidation(t *testing.T) {
 	}
 
 	claimReq := api.ClaimRequest{
-		Nonce:    12345,
-		Claimant: string(longClaimant),
+		Nonce: 12345,
+		Name:  string(longClaimant),
 	}
 
 	reqBody, err := json.Marshal(claimReq)
@@ -389,8 +389,8 @@ func TestHTTPServer_PayloadValidation(t *testing.T) {
 
 	// Test invalid IP address in path
 	claimReq = api.ClaimRequest{
-		Nonce:    12345,
-		Claimant: "testuser",
+		Nonce: 12345,
+		Name:  "testuser",
 	}
 
 	reqBody, err = json.Marshal(claimReq)

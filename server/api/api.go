@@ -3,7 +3,7 @@ package api
 
 // ClaimResponse represents the JSON response for a claim
 type ClaimResponse struct {
-	Claimant   string `json:"claimant,omitempty"`
+	Name       string `json:"name,omitempty"`
 	Difficulty uint8  `json:"difficulty,omitempty"`
 }
 
@@ -15,6 +15,6 @@ type SubnetResponse struct {
 
 // ClaimRequest represents a request to claim an IPv6 address
 type ClaimRequest struct {
-	Nonce    uint64 `json:"nonce"`
-	Claimant string `json:"claimant"`
+	Nonce uint64 `json:"nonce"`
+	Name  string `json:"name"`
 }

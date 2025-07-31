@@ -10,14 +10,14 @@ import (
 func TestProofOfWork_IsValid(t *testing.T) {
 	// Test case: known valid proof of work
 	pow := &api.ProofOfWork{
-		Target:   net.ParseIP("2001:db8::1"),
-		Claimant: "alice",
-		Nonce:    12345,
+		Target: net.ParseIP("2001:db8::1"),
+		Name:   "alice",
+		Nonce:  12345,
 	}
 	difficulty := uint8(8) // Example difficulty
 
 	// Find a valid nonce for this difficulty
-	validPow, err := api.SolveProofOfWork(pow.Target, pow.Claimant, difficulty, 1000000)
+	validPow, err := api.SolveProofOfWork(pow.Target, pow.Name, difficulty, 1000000)
 	if err != nil {
 		t.Fatalf("Failed to solve proof of work: %v", err)
 	}
@@ -28,9 +28,9 @@ func TestProofOfWork_IsValid(t *testing.T) {
 
 	// Test invalid proof of work (wrong nonce)
 	invalidPow := &api.ProofOfWork{
-		Target:   validPow.Target,
-		Claimant: validPow.Claimant,
-		Nonce:    validPow.Nonce + 1, // Wrong nonce
+		Target: validPow.Target,
+		Name:   validPow.Name,
+		Nonce:  validPow.Nonce + 1, // Wrong nonce
 	}
 
 	if invalidPow.IsValid(difficulty) {
@@ -77,34 +77,6 @@ func TestCalculateDifficulty(t *testing.T) {
 	expected = uint8(16)
 	if difficulty != expected {
 		t.Errorf("Expected difficulty %d for address with contiguous claims, got %d", expected, difficulty)
-	}
-}
-
-func TestClaimPacket_SerializeAndParse(t *testing.T) {
-	original := &api.ClaimPacket{
-		Nonce:    123456789,
-		Claimant: "alice",
-	}
-
-	// Serialize
-	data, err := original.Serialize()
-	if err != nil {
-		t.Fatalf("Failed to serialize packet: %v", err)
-	}
-
-	// Parse back
-	parsed, err := api.ParseClaimPacket(data)
-	if err != nil {
-		t.Fatalf("Failed to parse packet: %v", err)
-	}
-
-	// Verify fields
-	if parsed.Nonce != original.Nonce {
-		t.Errorf("Nonce mismatch: expected %d, got %d", original.Nonce, parsed.Nonce)
-	}
-
-	if parsed.Claimant != original.Claimant {
-		t.Errorf("Claimant mismatch: expected %s, got %s", original.Claimant, parsed.Claimant)
 	}
 }
 

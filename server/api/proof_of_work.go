@@ -10,21 +10,21 @@ import (
 
 // ProofOfWork represents a proof of work challenge and solution
 type ProofOfWork struct {
-	Target   net.IP // IPv6 address being claimed
-	Claimant string // Name of the claimant
-	Nonce    uint64 // Nonce used to solve the challenge
+	Target net.IP // IPv6 address being claimed
+	Name   string // Name of the claimant
+	Nonce  uint64 // Nonce used to solve the challenge
 }
 
 // Hash computes the SHA-256 hash of the proof of work data
 func (pow *ProofOfWork) Hash() [32]byte {
 	// Create input data: target_ip + claimant + nonce
-	data := make([]byte, 0, 16+len(pow.Claimant)+8)
+	data := make([]byte, 0, 16+len(pow.Name)+8)
 
 	// Add IPv6 address (16 bytes)
 	data = append(data, pow.Target.To16()...)
 
 	// Add claimant name
-	data = append(data, []byte(pow.Claimant)...)
+	data = append(data, []byte(pow.Name)...)
 
 	// Add nonce (8 bytes, big endian)
 	nonceBytes := make([]byte, 8)
@@ -66,8 +66,8 @@ func (pow *ProofOfWork) IsValid(difficulty uint8) bool {
 // SolveProofOfWork attempts to solve a proof of work challenge (for client use)
 func SolveProofOfWork(target net.IP, claimant string, difficulty uint8, maxAttempts uint64) (*ProofOfWork, error) {
 	pow := &ProofOfWork{
-		Target:   target,
-		Claimant: claimant,
+		Target: target,
+		Name:   claimant,
 	}
 
 	for nonce := range maxAttempts {

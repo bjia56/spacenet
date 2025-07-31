@@ -101,15 +101,14 @@ export function SpaceNetBrowser({
     try {
       // TODO: Implement proof-of-work solving in browser
       // For now, use a placeholder nonce - this will fail validation
-      const response = await fetch(`http://[${serverAddr}]:${httpPort}/api/claim`, {
+      const response = await fetch(`http://[${serverAddr}]:${httpPort}/api/claim/${ip}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          ip,
           nonce: 0, // TODO: Solve proof-of-work to get valid nonce
-          claimant: playerName
+          name: playerName
         })
       });
 

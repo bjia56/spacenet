@@ -32,7 +32,6 @@ func (h *HTTPHandler) RegisterRoutes(router *mux.Router) {
 
 // handleHealth handles the health check endpoint
 func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -61,7 +60,7 @@ func (h *HTTPHandler) handleGetClaimByIP(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	response := api.ClaimResponse{
-		Claimant:   claimant,
+		Name:       claimant,
 		Difficulty: difficulty,
 	}
 
@@ -124,16 +123,16 @@ func (h *HTTPHandler) handleSubmitClaim(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Validate claimant name
-	if len(claimReq.Claimant) == 0 || len(claimReq.Claimant) > 24 {
+	if len(claimReq.Name) == 0 || len(claimReq.Name) > 24 {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	// Create proof of work object
 	pow := &api.ProofOfWork{
-		Target:   targetIP,
-		Claimant: claimReq.Claimant,
-		Nonce:    claimReq.Nonce,
+		Target: targetIP,
+		Name:   claimReq.Name,
+		Nonce:  claimReq.Nonce,
 	}
 
 	// Validate proof of work
@@ -143,7 +142,7 @@ func (h *HTTPHandler) handleSubmitClaim(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Process the claim
-	err := h.store.ProcessClaim(ipAddr, claimReq.Claimant)
+	err := h.store.ProcessClaim(ipAddr, claimReq.Name)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

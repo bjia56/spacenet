@@ -149,9 +149,8 @@ func (m *Model) SendClaim(ip string) (string, error) {
 
 	// Create claim request
 	claimReq := api.ClaimRequest{
-		IP:       ip,
-		Nonce:    pow.Nonce,
-		Claimant: pow.Claimant,
+		Nonce: pow.Nonce,
+		Name:  pow.Name,
 	}
 
 	// Marshal to JSON
@@ -161,7 +160,7 @@ func (m *Model) SendClaim(ip string) (string, error) {
 	}
 
 	// Send HTTP POST request to server
-	serverURL := fmt.Sprintf("http://%s:%d/api/claim", m.serverAddr, m.httpPort)
+	serverURL := fmt.Sprintf("http://%s:%d/api/claim/%s", m.serverAddr, m.httpPort, ip)
 	
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", serverURL, strings.NewReader(string(data)))
