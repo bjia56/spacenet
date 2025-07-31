@@ -158,8 +158,6 @@ export function SpaceNetBrowser({
           <Canvas
             camera={{ position: [0, 0, 10] }}
           >
-            <ambientLight intensity={0.2} />
-            <pointLight position={[10, 10, 10]} />
             <SceneController
               ref={sceneRef}
               level={currentLevel}

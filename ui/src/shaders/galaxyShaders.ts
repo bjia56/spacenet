@@ -55,9 +55,9 @@ export function createGalaxyShaderMaterial(options: GalaxyShaderOptions = {}): T
       float sinAngle = sin(angle);
       float dotProduct = dot(position, axis);
       vec3 crossProduct = cross(axis, position);
-      
-      return position * cosAngle + 
-             crossProduct * sinAngle + 
+
+      return position * cosAngle +
+             crossProduct * sinAngle +
              axis * dotProduct * (1.0 - cosAngle);
     }
 
@@ -70,7 +70,7 @@ export function createGalaxyShaderMaterial(options: GalaxyShaderOptions = {}): T
       vec3 relativePos = originalPosition - clusterCenter;
       vec3 rotatedRelativePos = rotateAroundAxis(relativePos, rotationAxis, individualAngle);
       vec3 rotatedGalaxyPos = clusterCenter + rotatedRelativePos;
-      
+
       // Second: Orbital motion around group center
       float orbitalAngle = time * orbitalSpeed;
       vec3 orbitalRelativePos = rotatedGalaxyPos - groupCenter;
@@ -237,6 +237,19 @@ export const GALAXY_SHADER_PRESETS = {
     outerGlowIntensity: 1.4,
     alphaFalloff: 2.2,
     enableDualRotation: true
+  } as GalaxyShaderOptions,
+
+  /** For individual spiral galaxies - differential rotation */
+  spiralGalaxy: {
+    pulseFrequency: 1.8,
+    pulseAmplitude: 0.2,
+    pulseBase: 0.9,
+    positionFrequency: 0.08,
+    sizeScale: 320.0,
+    innerGlowIntensity: 1.5, // Reduced from 3.2
+    outerGlowIntensity: 0.8, // Reduced from 1.8
+    alphaFalloff: 2.0,
+    enableRotation: true
   } as GalaxyShaderOptions
 };
 
