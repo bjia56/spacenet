@@ -1,199 +1,39 @@
 import { createHash } from 'crypto';
+import ipv6NamesData from '../../../tui/ipv6names.json';
 
-// Predefined word lists for name generation (ported from Go TUI)
-const adjectives: Record<number, string[]> = {
-  // Level 16 - Universe-scale adjectives
-  16: [
-    "Absolute", "Boundless", "Colossal", "Cosmic", "Eternal", "Fundamental",
-    "Infinite", "Interstellar", "Limitless", "Paramount", "Primordial", "Universal",
-    "Ultimate", "Vast", "Celestial", "Omnipotent", "Singular", "Supreme",
-  ],
+interface IPv6NamesData {
+  adjectives: Record<string, string[]>;
+  nouns: Record<string, string[]>;
+  celestialTypes: Record<string, string[]>;
+  subnetMappings: Record<string, number>;
+  levelNames: string[];
+}
 
-  // Level 32 - Supercluster adjectives
-  32: [
-    "Abundant", "Ascending", "Binding", "Dynamic", "Endless", "Fundamental",
-    "Grand", "Hyperion", "Imperial", "Majestic", "Sovereign", "Stellar",
-    "Sublime", "Unified", "Dominant", "Mammoth", "Massive",
-  ],
+const namesData = ipv6NamesData as IPv6NamesData;
 
-  // Level 48 - Galaxy Group adjectives
-  48: [
-    "Abundant", "Clustered", "Collective", "Connected", "Flowing", "Gathering",
-    "Harmonious", "Linked", "Networked", "Streaming", "Unified", "United",
-    "Woven", "Bound", "Converging", "Joined",
-  ],
+const adjectives: Record<number, string[]> = {};
+const nouns: Record<number, string[]> = {};
+const celestialTypes: Record<number, string[]> = {};
 
-  // Level 64 - Galaxy adjectives
-  64: [
-    "Astral", "Blazing", "Brilliant", "Luminous", "Nebulous", "Radiant",
-    "Shining", "Spiraling", "Stellar", "Swirling", "Whirling", "Rotating",
-    "Galactic", "Cosmic", "Starborn", "Celestial",
-  ],
+for (const [strKey, value] of Object.entries(namesData.adjectives)) {
+  adjectives[parseInt(strKey)] = value;
+}
 
-  // Level 80 - Star Group adjectives
-  80: [
-    "Burning", "Flaring", "Gleaming", "Glowing", "Golden", "Illuminated",
-    "Lucent", "Pulsing", "Radiating", "Scintillating", "Twinkling", "Bright",
-    "Dazzling", "Effulgent", "Starlit",
-  ],
+for (const [strKey, value] of Object.entries(namesData.nouns)) {
+  nouns[parseInt(strKey)] = value;
+}
 
-  // Level 96 - Solar System adjectives
-  96: [
-    "Balanced", "Circular", "Gravitational", "Harmonious", "Orbital", "Planetary",
-    "Revolving", "Solar", "Synchronous", "Systematic", "Aligned", "Cyclic",
-    "Ecliptic", "Ordered",
-  ],
+for (const [strKey, value] of Object.entries(namesData.celestialTypes)) {
+  celestialTypes[parseInt(strKey)] = value;
+}
 
-  // Level 112 - Planet adjectives
-  112: [
-    "Azure", "Crystalline", "Emerald", "Frozen", "Gaseous", "Molten",
-    "Obsidian", "Rocky", "Sapphire", "Terrestrial", "Tropical", "Verdant",
-    "Violet", "Volcanic", "Windswept", "Crimson",
-  ],
+// Subnet size mappings from JSON data
+export const subnetMappings: Record<number, number> = {};
+for (const [strKey, value] of Object.entries(namesData.subnetMappings)) {
+  subnetMappings[parseInt(strKey)] = value;
+}
 
-  // Level 128 - Settlement adjectives
-  128: [
-    "Ancient", "Bustling", "Colonial", "Fortified", "Hidden", "Industrial",
-    "Metropolitan", "Noble", "Prosperous", "Rising", "Sacred", "Thriving",
-    "Urban", "Vibrant", "Wealthy", "Established",
-  ],
-};
-
-const nouns: Record<number, string[]> = {
-  // Level 16 - Universe-scale nouns
-  16: [
-    "Axis", "Boundary", "Expanse", "Firmament", "Infinity", "Matrix",
-    "Membrane", "Nexus", "Singularity", "Terminus", "Vector", "Vertex",
-    "Void", "Web", "Fabric", "Lattice", "Framework",
-  ],
-
-  // Level 32 - Supercluster nouns
-  32: [
-    "Amalgam", "Bastion", "Colossus", "Domain", "Empire", "Formation",
-    "Legion", "Mandate", "Realm", "Sphere", "Supremacy", "Unity",
-    "Dominion", "Coalition", "Assembly",
-  ],
-
-  // Level 48 - Galaxy Group nouns
-  48: [
-    "Assembly", "Chain", "Confluence", "Fellowship", "Network", "Pattern",
-    "Sequence", "Stream", "Symphony", "Union", "Weave", "Collection",
-    "Gathering", "Association",
-  ],
-
-  // Level 64 - Galaxy nouns
-  64: [
-    "Corona", "Cosmos", "Disk", "Eye", "Helix", "Nebula",
-    "Spiral", "Star", "Vortex", "Whirlpool", "Ring", "Cloud",
-    "Field", "Sea", "Cluster",
-  ],
-
-  // Level 80 - Star Group nouns
-  80: [
-    "Beacon", "Constellation", "Crucible", "Ember", "Flame", "Forge",
-    "Light", "Pyre", "Spark", "Torch", "Aurora", "Flare",
-    "Stream", "Garden",
-  ],
-
-  // Level 96 - Solar System nouns
-  96: [
-    "Circuit", "Cycle", "Horizon", "Orbit", "Path", "Procession",
-    "Ring", "Sanctuary", "Sphere", "System", "Dance", "Family",
-    "Haven", "Domain",
-  ],
-
-  // Level 112 - Planet nouns
-  112: [
-    "Globe", "Haven", "Heart", "Keep", "Oasis", "Paradise",
-    "Sanctuary", "Sphere", "Stronghold", "Vale", "World", "Garden",
-    "Realm", "Crown", "Jewel",
-  ],
-
-  // Level 128 - Settlement nouns
-  128: [
-    "Arcology", "Citadel", "Enclave", "Fortress", "Haven", "Nexus",
-    "Outpost", "Sanctuary", "Spire", "Stronghold", "Tower", "Ward",
-    "Capital", "Port", "Station", "Hub",
-  ],
-};
-
-const celestialTypes: Record<number, string[]> = {
-  // Largest scale structures - massive cosmic boundaries and constructs
-  16: [
-    "Superstructure", "Cosmic Wall", "Great Wall", "Filament",
-    "Cosmic Web", "Void Wall", "Megastructure", "Cosmic Ring",
-    "Barrier", "Cosmic Membrane", "Universal Divide",
-  ],
-
-  // Major galaxy collection scales
-  32: [
-    "Supercluster", "Galaxy Shell", "Cosmic Shell", "Massive Cluster",
-    "Meta Cluster", "Celestial Complex", "Cosmic Cloud", "Stellar Sea",
-  ],
-
-  // Medium-large galaxy groupings
-  48: [
-    "Galaxy Group", "Star Cluster", "Stellar Association",
-    "Galactic Cloud", "Cosmic Stream", "Celestial Chain",
-    "Stellar Complex", "Galactic Gathering",
-  ],
-
-  // Individual large stellar collections
-  64: [
-    "Galaxy", "Nebula", "Star Sea", "Stellar Spiral",
-    "Cosmic Disk", "Star Cloud", "Stellar Field", "Galactic Ring",
-  ],
-
-  // Localized star groupings
-  80: [
-    "Star Group", "Stellar Cluster", "Star Stream", "Star Field",
-    "Cosmic Oasis", "Stellar Neighborhood", "Star Colony", "Stellar Circuit",
-  ],
-
-  // Individual star systems
-  96: [
-    "Solar System", "Star System", "Planetary System", "Stellar Domain",
-    "Cosmic Haven", "Star Domain", "Stellar Sanctuary", "Orbital Realm",
-  ],
-
-  // Major celestial bodies
-  112: [
-    "Planet", "Celestial Body", "World", "Planetoid",
-    "Moon", "Satellite", "Giant Moon", "Megamoon",
-    "Dwarf Planet", "Minor Planet", "Ice Giant", "Gas Giant",
-  ],
-
-  // Inhabited locations
-  128: [
-    "Metropolis", "City", "Megacity", "Habitat",
-    "Colony", "Settlement", "Outpost", "Station",
-    "Enclave", "Base", "Community", "Urban Center",
-    "Village", "Town", "Borough", "District",
-  ],
-};
-
-// Subnet size mappings
-export const subnetMappings: Record<number, number> = {
-  0: 16,
-  1: 32,
-  2: 48,
-  3: 64,
-  4: 80,
-  5: 96,
-  6: 112,
-  7: 128,
-};
-
-export const levelNames = [
-  "Great Wall",
-  "Supercluster", 
-  "Galaxy Group",
-  "Galaxy",
-  "Star Cluster",
-  "Solar System",
-  "Planet",
-  "City"
-];
+export const levelNames = namesData.levelNames;
 
 // Helper function to parse IPv6 address and create truncated version
 function truncateIPv6(addr: string, bits: number): Buffer {
