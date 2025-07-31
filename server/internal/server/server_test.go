@@ -43,8 +43,7 @@ func makeHTTPClaimRequest(t *testing.T, baseURL, targetIP, claimant string, diff
 func TestServerBasicFunctionality(t *testing.T) {
 	// Use ephemeral ports for testing
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0, // Port 0 will assign an available port
-		HTTPPort: 0, // Also use ephemeral port for HTTP
+		HTTPPort: 0, // Use ephemeral port for HTTP
 	})
 
 	// Test server creation
@@ -99,7 +98,6 @@ func TestClaimStoreBasicOperations(t *testing.T) {
 func TestHTTPHandlerBasicOperations(t *testing.T) {
 	// Create a server with ephemeral ports
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -150,7 +148,6 @@ func TestHTTPHandlerBasicOperations(t *testing.T) {
 func TestHTTPClaimProcessing(t *testing.T) {
 	// Create server with ephemeral ports
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -208,7 +205,6 @@ func TestSubnetStats(t *testing.T) {
 func TestServerIntegration(t *testing.T) {
 	// Create server
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -245,7 +241,6 @@ func TestServerIntegration(t *testing.T) {
 // TestHTTPHandler_InvalidIPAddress tests error handling for invalid IP addresses
 func TestHTTPHandler_InvalidIPAddress(t *testing.T) {
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -274,7 +269,6 @@ func TestHTTPHandler_InvalidIPAddress(t *testing.T) {
 // TestHTTPHandler_SubnetStats tests subnet statistics endpoint
 func TestHTTPHandler_SubnetStats(t *testing.T) {
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -311,7 +305,6 @@ func TestHTTPHandler_SubnetStats(t *testing.T) {
 // TestHTTPHandler_InvalidSubnet tests error handling for invalid subnet format
 func TestHTTPHandler_InvalidSubnet(t *testing.T) {
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -340,7 +333,6 @@ func TestHTTPHandler_InvalidSubnet(t *testing.T) {
 // TestHTTPServer_InvalidPayload tests handling of invalid HTTP payloads
 func TestHTTPServer_InvalidPayload(t *testing.T) {
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -375,7 +367,6 @@ func TestHTTPServer_InvalidPayload(t *testing.T) {
 // TestHTTPServer_PayloadValidation tests HTTP payload validation
 func TestHTTPServer_PayloadValidation(t *testing.T) {
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -433,7 +424,6 @@ func TestHTTPServer_PayloadValidation(t *testing.T) {
 // TestServerPortTimeout tests timeout behavior for port assignment
 func TestServerPortTimeout(t *testing.T) {
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -446,7 +436,6 @@ func TestServerPortTimeout(t *testing.T) {
 // TestServerStop_Graceful tests graceful server shutdown
 func TestServerStop_Graceful(t *testing.T) {
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
@@ -513,14 +502,13 @@ func TestNewServerWithOptions_DefaultValues(t *testing.T) {
 	// Verify server has required components
 	assert.NotNil(t, server.store, "Server should have a store")
 	assert.NotNil(t, server.httpHandler, "Server should have HTTP handler")
-	assert.NotNil(t, server.udpPortReady, "Server should have UDP port channel")
+	// UDP functionality removed - no UDP port channel expected
 	assert.NotNil(t, server.httpPortReady, "Server should have HTTP port channel")
 }
 
 // TestHTTPServer_ClaimOverwrite tests that HTTP server properly handles claim overwrites
 func TestHTTPServer_ClaimOverwrite(t *testing.T) {
 	server := NewServerWithOptions(ServerOptions{
-		Port:     0,
 		HTTPPort: 0,
 	})
 
