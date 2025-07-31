@@ -10,8 +10,8 @@ SpaceNet is an innovative space-themed IPv6 network visualization and claiming s
 - **Language**: Go 1.24.5
 - **Web Framework**: Gorilla Mux for HTTP routing
 - **Database**: Redis for distributed claim storage
-- **Networking**: Custom UDP server for real-time IPv6 claims
-- **Architecture**: Microservices with dual-protocol support (HTTP API + UDP streaming)
+- **Networking**: HTTP API for IPv6 claims with proof-of-work validation
+- **Architecture**: HTTP-based microservices with RESTful API endpoints
 
 **Frontend Architecture:**
 - **Framework**: Next.js 15.4.4 with React 19
@@ -31,11 +31,11 @@ SpaceNet is an innovative space-themed IPv6 network visualization and claiming s
 
 #### **Backend Development** → @backend-developer
 - **Primary Focus**: Go backend services, networking protocols, distributed systems
-- **Expertise**: UDP/HTTP server optimization, Redis integration, concurrent processing
+- **Expertise**: HTTP server optimization, Redis integration, concurrent processing
 - **Use Cases**: 
-  - "Optimize the UDP packet processing workers"
   - "Add new API endpoints for claim statistics"
   - "Implement distributed claim validation logic"
+  - "Optimize HTTP request processing and proof-of-work validation"
 
 #### **Frontend Development** → @react-nextjs-expert
 - **Primary Focus**: Next.js application architecture, React patterns, TypeScript optimization
@@ -56,11 +56,11 @@ SpaceNet is an innovative space-themed IPv6 network visualization and claiming s
 ### Specialized System Experts
 
 #### **API Architecture** → @api-architect
-- **Primary Focus**: RESTful API design, HTTP/UDP protocol integration, distributed system patterns
-- **Expertise**: API versioning, rate limiting, real-time communication patterns
+- **Primary Focus**: RESTful API design, HTTP protocol optimization, distributed system patterns
+- **Expertise**: API versioning, rate limiting, proof-of-work integration
 - **Use Cases**:
   - "Design scalable endpoints for massive IPv6 address spaces"
-  - "Implement WebSocket support for real-time claim updates"
+  - "Optimize claim submission API for high throughput"
   - "Add authentication and authorization layers"
 
 #### **Performance Optimization** → @performance-optimizer
@@ -87,7 +87,7 @@ SpaceNet is an innovative space-themed IPv6 network visualization and claiming s
 - **Use Cases**:
   - "Review my claim processing security implementation"
   - "Analyze the 3D component architecture for maintainability"
-  - "Security audit of the UDP server implementation"
+  - "Security audit of the HTTP API implementation"
 
 #### **Documentation** → @documentation-specialist
 - **Primary Focus**: Technical documentation, API documentation, architectural guides
@@ -145,7 +145,7 @@ SpaceNet is an innovative space-themed IPv6 network visualization and claiming s
 
 Your SpaceNet project showcases several advanced patterns:
 
-- **Dual-Protocol Design**: HTTP API for standard operations, UDP for high-frequency claims
+- **HTTP-First Design**: RESTful API for all operations with proof-of-work validation
 - **Hierarchical Visualization**: 8-level IPv6 space mapped to cosmic structures
 - **Real-Time Coordination**: Redis for distributed claim state management  
 - **Immersive UX**: 3D navigation through abstract network concepts

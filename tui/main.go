@@ -93,7 +93,6 @@ var subnetMappings = [8]int{
 type Model struct {
 	serverAddr string
 	httpPort   int
-	udpPort    int
 	name       string
 
 	unitTables    UnitTables // Tables for displaying subnets with fun names
@@ -121,11 +120,10 @@ func makeIPv6Full(i int, prefix string, level level) (string, int) {
 }
 
 // Initialize returns an initial model
-func Initialize(serverAddr string, httpPort, udpPort int, name string) *Model {
+func Initialize(serverAddr string, httpPort int, name string) *Model {
 	m := &Model{
 		serverAddr:    serverAddr,
 		httpPort:      httpPort,
-		udpPort:       udpPort,
 		name:          name,
 		refreshClaims: true,
 	}
@@ -135,7 +133,7 @@ func Initialize(serverAddr string, httpPort, udpPort int, name string) *Model {
 	return m
 }
 
-// SendClaim sends a proof of work claim for an IP
+// SendClaim sends a proof of work claim for an IP via HTTP API
 func (m *Model) SendClaim(ip string) (string, error) {
 	// Parse the IP to ensure it's valid
 	targetIP := net.ParseIP(ip)
@@ -149,48 +147,41 @@ func (m *Model) SendClaim(ip string) (string, error) {
 		return "", fmt.Errorf("failed to solve proof of work: %v", err)
 	}
 
-	// Create claim packet
-	packet := &api.ClaimPacket{
+	// Create claim request
+	claimReq := api.ClaimRequest{
+		IP:       ip,
 		Nonce:    pow.Nonce,
 		Claimant: pow.Claimant,
 	}
 
-	// Serialize packet
-	data, err := packet.Serialize()
+	// Marshal to JSON
+	data, err := json.Marshal(claimReq)
 	if err != nil {
-		return "", fmt.Errorf("failed to serialize packet: %v", err)
+		return "", fmt.Errorf("failed to marshal request: %v", err)
 	}
 
-	// Send UDP packet to server
-	serverAddr := fmt.Sprintf("[%s]:%d", m.serverAddr, m.udpPort)
-	udpAddr, err := net.ResolveUDPAddr("udp", serverAddr)
+	// Send HTTP POST request to server
+	serverURL := fmt.Sprintf("http://%s:%d/api/claim", m.serverAddr, m.httpPort)
+	
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", serverURL, strings.NewReader(string(data)))
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve server address: %v", err)
+		return "", fmt.Errorf("failed to create request: %v", err)
 	}
+	req.Header.Set("Content-Type", "application/json")
 
-	conn, err := net.DialUDP("udp", nil, udpAddr)
+	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to connect to server: %v", err)
+		return "", fmt.Errorf("failed to send request: %v", err)
 	}
-	defer conn.Close()
+	defer resp.Body.Close()
 
-	// Set source address to the IP we're claiming
-	localAddr := &net.UDPAddr{IP: targetIP, Port: 0}
-	localConn, err := net.DialUDP("udp", localAddr, udpAddr)
-	if err != nil {
-		// Fallback to regular connection if binding to specific IP fails
-		localConn = conn
+	// Check response status
+	if resp.StatusCode == http.StatusCreated {
+		return fmt.Sprintf("Claim sent! Nonce: %d", pow.Nonce), nil
 	} else {
-		conn.Close()
-		conn = localConn
+		return "", fmt.Errorf("server returned status: %d", resp.StatusCode)
 	}
-
-	_, err = conn.Write(data)
-	if err != nil {
-		return "", fmt.Errorf("failed to send packet: %v", err)
-	}
-
-	return fmt.Sprintf("Claim sent! Nonce: %d", pow.Nonce), nil
 }
 
 // PopulateTable populates a table with 2^16 rows
@@ -353,7 +344,6 @@ func main() {
 	// Parse command line flags
 	server := flag.String("server", "::1", "IPv6 address of the server")
 	httpPort := flag.Int("http-port", 8080, "HTTP port for the server's API")
-	udpPort := flag.Int("port", 1337, "UDP port number of the server")
 	name := flag.String("name", "Anonymous", "Name to use for claims")
 	flag.Parse()
 
@@ -366,7 +356,7 @@ func main() {
 	defer f.Close()
 
 	// Initialize the TUI
-	p := tea.NewProgram(Initialize(*server, *httpPort, *udpPort, *name), tea.WithAltScreen())
+	p := tea.NewProgram(Initialize(*server, *httpPort, *name), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		log.Fatalf("Error running program: %v", err)
 	}
