@@ -12,3 +12,10 @@ type SubnetResponse struct {
 	Owner      string  `json:"owner,omitempty"`
 	Percentage float64 `json:"percentage,omitempty"`
 }
+
+// ClaimRequest represents a request to claim an IPv6 address
+type ClaimRequest struct {
+	IP       string `json:"ip"`
+	Nonce    uint64 `json:"nonce"`
+	Claimant string `json:"claimant"`
+}

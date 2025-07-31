@@ -11,7 +11,6 @@ import (
 )
 
 var (
-	port      int
 	httpPort  int
 	redisAddr string
 )
@@ -20,14 +19,13 @@ func main() {
 	rootCmd := &cobra.Command{
 		Use:   "spacenet",
 		Short: "An IPv6 territory control game",
-		Long:  "A space-themed network control game where players claim IPv6 addresses by sending UDP packets.",
+		Long:  "A space-themed network control game where players claim IPv6 addresses via HTTP API.",
 		Run: func(cmd *cobra.Command, args []string) {
 			runServer()
 		},
 	}
 
 	// Define flags
-	rootCmd.Flags().IntVarP(&port, "port", "p", 1337, "UDP port to listen on")
 	rootCmd.Flags().IntVar(&httpPort, "http-port", 8080, "HTTP port for the REST API")
 	rootCmd.Flags().StringVarP(&redisAddr, "redis", "r", "", "Redis address (host:port), if not specified in-memory store is used")
 
@@ -38,7 +36,7 @@ func main() {
 
 // runServer starts the SpaceNet server with the configured options
 func runServer() {
-	log.Printf("Starting SpaceNet server on UDP port %d and HTTP port %d", port, httpPort)
+	log.Printf("Starting SpaceNet server on HTTP port %d", httpPort)
 	if redisAddr == "" {
 		log.Println("Using in-memory store")
 	} else {
@@ -47,7 +45,6 @@ func runServer() {
 
 	// Create a new server with options
 	srv := server.NewServerWithOptions(server.ServerOptions{
-		Port:      port,
 		HTTPPort:  httpPort,
 		RedisAddr: redisAddr,
 	})
