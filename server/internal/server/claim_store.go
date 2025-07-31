@@ -1,26 +1,26 @@
 package server
 
 import (
-	"context"
+	"database/sql"
 	"sync"
 
-	"github.com/redis/go-redis/v9"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // ClaimStore is an in-memory store for IP address claims
-// It can optionally use Redis as a backend store
+// It can optionally use SQLite as a backend store
 type ClaimStore struct {
-	mutex       sync.RWMutex
-	claims      map[string]string // map[ipAddress]claimantName
-	ipTree      *IPTree           // Hierarchical tree for subnet-based queries
-	redisClient *redis.Client     // Optional Redis client for persistence
-	ctx         context.Context   // Context for Redis operations
+	mutex    sync.RWMutex
+	claims   map[string]string // map[ipAddress]claimantName
+	ipTree   *IPTree           // Hierarchical tree for subnet-based queries
+	db       *sql.DB           // Optional SQLite database for persistence
+	dbPath   string            // Path to SQLite database file
 }
 
 // Verify ClaimStore implements Store interface
 var _ Store = (*ClaimStore)(nil)
 
-// NewClaimStore creates a new in-memory claim store without Redis
+// NewClaimStore creates a new in-memory claim store without SQLite
 func NewClaimStore() *ClaimStore {
 	return &ClaimStore{
 		claims: make(map[string]string),
@@ -28,68 +28,74 @@ func NewClaimStore() *ClaimStore {
 	}
 }
 
-// NewClaimStoreWithRedis creates a claim store with Redis backend
-func NewClaimStoreWithRedis(redisAddr string) (*ClaimStore, error) {
-	client := redis.NewClient(&redis.Options{
-		Addr:     redisAddr,
-		Password: "", // no password
-		DB:       0,  // use default DB
-	})
-
-	ctx := context.Background()
-
-	// Test the connection
-	_, err := client.Ping(ctx).Result()
+// NewClaimStoreWithSQLite creates a claim store with SQLite backend
+func NewClaimStoreWithSQLite(dbPath string) (*ClaimStore, error) {
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
 	}
 
-	store := &ClaimStore{
-		claims:      make(map[string]string),
-		ipTree:      NewIPTree(),
-		redisClient: client,
-		ctx:         ctx,
+	// Test the connection
+	if err := db.Ping(); err != nil {
+		return nil, err
 	}
 
-	// Load existing claims from Redis
-	err = store.loadFromRedis()
-	if err != nil {
+	store := &ClaimStore{
+		claims: make(map[string]string),
+		ipTree: NewIPTree(),
+		db:     db,
+		dbPath: dbPath,
+	}
+
+	// Initialize database schema
+	if err := store.initSchema(); err != nil {
+		return nil, err
+	}
+
+	// Load existing claims from SQLite
+	if err := store.loadFromSQLite(); err != nil {
 		return nil, err
 	}
 
 	return store, nil
 }
 
-// loadFromRedis loads all claims from Redis into memory
-func (cs *ClaimStore) loadFromRedis() error {
-	// Use SCAN to iterate over all keys
-	var cursor uint64
-	for {
-		var keys []string
-		var err error
-		keys, cursor, err = cs.redisClient.Scan(cs.ctx, cursor, "*", 10).Result()
-		if err != nil {
+// initSchema creates the database schema if it doesn't exist
+func (cs *ClaimStore) initSchema() error {
+	schema := `
+		CREATE TABLE IF NOT EXISTS claims (
+			ip_address TEXT PRIMARY KEY,
+			claimant TEXT NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX IF NOT EXISTS idx_claimant ON claims(claimant);
+	`
+	_, err := cs.db.Exec(schema)
+	return err
+}
+
+// loadFromSQLite loads all claims from SQLite into memory
+func (cs *ClaimStore) loadFromSQLite() error {
+	rows, err := cs.db.Query("SELECT ip_address, claimant FROM claims")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var ipAddr, claimant string
+		if err := rows.Scan(&ipAddr, &claimant); err != nil {
 			return err
 		}
 
-		// Get values for all keys
-		for _, key := range keys {
-			val, err := cs.redisClient.Get(cs.ctx, key).Result()
-			if err == nil && val != "" {
-				// Store in memory
-				cs.claims[key] = val
-				// Update the tree
-				cs.ipTree.processClaim(key, val, "")
-			}
-		}
-
-		// No more keys
-		if cursor == 0 {
-			break
-		}
+		// Store in memory
+		cs.claims[ipAddr] = claimant
+		// Update the tree
+		cs.ipTree.processClaim(ipAddr, claimant, "")
 	}
 
-	return nil
+	return rows.Err()
 }
 
 // ProcessClaim processes a claim request and updates the store
@@ -104,10 +110,25 @@ func (cs *ClaimStore) ProcessClaim(ipAddr string, claimant string) error {
 	// Store new claim in memory
 	cs.claims[ipAddr] = claimant
 
-	// If Redis is enabled, write through to Redis
-	if cs.redisClient != nil {
-		if err := cs.redisClient.Set(cs.ctx, ipAddr, claimant, 0).Err(); err != nil {
-			// If Redis fails, revert the in-memory change and propagate error
+	// If SQLite is enabled, write through to SQLite
+	if cs.db != nil {
+		var err error
+		if exists {
+			// Update existing claim
+			_, err = cs.db.Exec(
+				"UPDATE claims SET claimant = ?, updated_at = CURRENT_TIMESTAMP WHERE ip_address = ?",
+				claimant, ipAddr,
+			)
+		} else {
+			// Insert new claim
+			_, err = cs.db.Exec(
+				"INSERT INTO claims (ip_address, claimant) VALUES (?, ?)",
+				ipAddr, claimant,
+			)
+		}
+
+		if err != nil {
+			// If SQLite fails, revert the in-memory change and propagate error
 			if exists {
 				cs.claims[ipAddr] = oldClaimant
 			} else {
@@ -159,8 +180,8 @@ func (cs *ClaimStore) GetAllClaims() map[string]string {
 
 // Close releases any resources held by the store
 func (cs *ClaimStore) Close() error {
-	if cs.redisClient != nil {
-		return cs.redisClient.Close()
+	if cs.db != nil {
+		return cs.db.Close()
 	}
 	return nil
 }

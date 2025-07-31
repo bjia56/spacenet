@@ -22,8 +22,8 @@ type Server struct {
 
 // ServerOptions holds configuration options for the server
 type ServerOptions struct {
-	HTTPPort  int
-	RedisAddr string // Format: "host:port"
+	HTTPPort int
+	DBPath   string // Path to SQLite database file
 }
 
 // NewServerWithOptions creates a new spacenet server instance with custom options
@@ -31,13 +31,13 @@ func NewServerWithOptions(opts ServerOptions) *Server {
 	var store Store
 	var err error
 
-	if opts.RedisAddr == "" {
+	if opts.DBPath == "" {
 		store = NewClaimStore()
 	} else {
-		// Use ClaimStore with Redis backend
-		store, err = NewClaimStoreWithRedis(opts.RedisAddr)
+		// Use ClaimStore with SQLite backend
+		store, err = NewClaimStoreWithSQLite(opts.DBPath)
 		if err != nil {
-			log.Fatalf("Failed to connect to Redis at %s: %v", opts.RedisAddr, err)
+			log.Fatalf("Failed to open SQLite database at %s: %v", opts.DBPath, err)
 		}
 	}
 

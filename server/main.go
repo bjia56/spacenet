@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	httpPort  int
-	redisAddr string
+	httpPort int
+	dbPath   string
 )
 
 func main() {
@@ -27,7 +27,7 @@ func main() {
 
 	// Define flags
 	rootCmd.Flags().IntVar(&httpPort, "http-port", 8080, "HTTP port for the REST API")
-	rootCmd.Flags().StringVarP(&redisAddr, "redis", "r", "", "Redis address (host:port), if not specified in-memory store is used")
+	rootCmd.Flags().StringVarP(&dbPath, "database", "d", "", "SQLite database file path, if not specified in-memory store is used")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatalf("Failed to execute command: %v", err)
@@ -37,16 +37,16 @@ func main() {
 // runServer starts the SpaceNet server with the configured options
 func runServer() {
 	log.Printf("Starting SpaceNet server on HTTP port %d", httpPort)
-	if redisAddr == "" {
+	if dbPath == "" {
 		log.Println("Using in-memory store")
 	} else {
-		log.Printf("Using Redis store at %s", redisAddr)
+		log.Printf("Using SQLite database at %s", dbPath)
 	}
 
 	// Create a new server with options
 	srv := server.NewServerWithOptions(server.ServerOptions{
-		HTTPPort:  httpPort,
-		RedisAddr: redisAddr,
+		HTTPPort: httpPort,
+		DBPath:   dbPath,
 	})
 
 	// Start the server
