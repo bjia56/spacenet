@@ -148,6 +148,33 @@ float terrainHeight(
   // Multiply by amplitude and adjust offset
   return max(0.0, h + offset);
 }
+
+float blendedTerrainHeight(
+  vec3 v,
+  float amplitude1, float amplitude2, float amplitude3,
+  float weight1, float weight2, float weight3,
+  float sharpness,
+  float offset,
+  float period,
+  float persistence,
+  float lacunarity,
+  int octaves
+) {
+  // Generate three different terrain types
+  float h1 = amplitude1 * simplex3(v / period);
+
+  float h2 = fractal3(v, sharpness, period, persistence, lacunarity, octaves);
+  h2 = amplitude2 * pow(max(0.0, (h2 + 1.0) / 2.0), sharpness);
+
+  float h3 = fractal3(v, sharpness, period * 0.8, persistence, lacunarity, octaves);
+  h3 = amplitude3 * pow(max(0.0, 1.0 - abs(h3)), sharpness);
+
+  // Blend the three terrain types using weights
+  float totalWeight = weight1 + weight2 + weight3;
+  float blendedHeight = (h1 * weight1 + h2 * weight2 + h3 * weight3) / totalWeight;
+
+  return max(0.0, blendedHeight + offset);
+}
 `;
 
 // Vertex shader for the planet
@@ -165,6 +192,15 @@ uniform float persistence;
 uniform float lacunarity;
 uniform int octaves;
 
+// Blended terrain parameters
+uniform float amplitude1;
+uniform float amplitude2;
+uniform float amplitude3;
+uniform float weight1;
+uniform float weight2;
+uniform float weight3;
+uniform bool useBlended;
+
 // Bump mapping
 uniform float bumpStrength;
 uniform float bumpOffset;
@@ -178,16 +214,30 @@ ${noiseFunctions}
 
 void main() {
   // Calculate terrain height
-  float h = terrainHeight(
-    type,
-    position,
-    amplitude,
-    sharpness,
-    offset,
-    period,
-    persistence,
-    lacunarity,
-    octaves);
+  float h;
+  if (useBlended) {
+    h = blendedTerrainHeight(
+      position,
+      amplitude1, amplitude2, amplitude3,
+      weight1, weight2, weight3,
+      sharpness,
+      offset,
+      period,
+      persistence,
+      lacunarity,
+      octaves);
+  } else {
+    h = terrainHeight(
+      type,
+      position,
+      amplitude,
+      sharpness,
+      offset,
+      period,
+      persistence,
+      lacunarity,
+      octaves);
+  }
 
   vec3 pos = position * (radius + h);
 
@@ -211,6 +261,15 @@ uniform float period;
 uniform float persistence;
 uniform float lacunarity;
 uniform int octaves;
+
+// Blended terrain parameters
+uniform float amplitude1;
+uniform float amplitude2;
+uniform float amplitude3;
+uniform float weight1;
+uniform float weight2;
+uniform float weight3;
+uniform bool useBlended;
 
 // Layer colors
 uniform vec3 color1;
@@ -253,40 +312,82 @@ ${noiseFunctions}
 
 void main() {
   // Calculate terrain height
-  float h = terrainHeight(
-    type,
-    fragPosition,
-    amplitude,
-    sharpness,
-    offset,
-    period,
-    persistence,
-    lacunarity,
-    octaves);
+  float h;
+  if (useBlended) {
+    h = blendedTerrainHeight(
+      fragPosition,
+      amplitude1, amplitude2, amplitude3,
+      weight1, weight2, weight3,
+      sharpness,
+      offset,
+      period,
+      persistence,
+      lacunarity,
+      octaves);
+  } else {
+    h = terrainHeight(
+      type,
+      fragPosition,
+      amplitude,
+      sharpness,
+      offset,
+      period,
+      persistence,
+      lacunarity,
+      octaves);
+  }
 
   vec3 dx = bumpOffset * fragTangent;
-  float h_dx = terrainHeight(
-    type,
-    fragPosition + dx,
-    amplitude,
-    sharpness,
-    offset,
-    period,
-    persistence,
-    lacunarity,
-    octaves);
+  float h_dx;
+  if (useBlended) {
+    h_dx = blendedTerrainHeight(
+      fragPosition + dx,
+      amplitude1, amplitude2, amplitude3,
+      weight1, weight2, weight3,
+      sharpness,
+      offset,
+      period,
+      persistence,
+      lacunarity,
+      octaves);
+  } else {
+    h_dx = terrainHeight(
+      type,
+      fragPosition + dx,
+      amplitude,
+      sharpness,
+      offset,
+      period,
+      persistence,
+      lacunarity,
+      octaves);
+  }
 
   vec3 dy = bumpOffset * fragBitangent;
-  float h_dy = terrainHeight(
-    type,
-    fragPosition + dy,
-    amplitude,
-    sharpness,
-    offset,
-    period,
-    persistence,
-    lacunarity,
-    octaves);
+  float h_dy;
+  if (useBlended) {
+    h_dy = blendedTerrainHeight(
+      fragPosition + dy,
+      amplitude1, amplitude2, amplitude3,
+      weight1, weight2, weight3,
+      sharpness,
+      offset,
+      period,
+      persistence,
+      lacunarity,
+      octaves);
+  } else {
+    h_dy = terrainHeight(
+      type,
+      fragPosition + dy,
+      amplitude,
+      sharpness,
+      offset,
+      period,
+      persistence,
+      lacunarity,
+      octaves);
+  }
 
   vec3 pos = fragPosition * (radius + h);
   vec3 pos_dx = (fragPosition + dx) * (radius + h_dx);
@@ -403,7 +504,18 @@ export function Planet3D({ ipSeed }: Planet3DProps) {
   const planetParams = useMemo(() => {
     const rng = new SeededRandom(ipSeed);
 
-    // Generate terrain type based on seed
+    // Generate terrain blending weights
+    const useBlended = rng.random() > 0.3; // 70% chance to use blended terrain
+    const weight1 = 0.2 + rng.random() * 0.6; // Simplex weight
+    const weight2 = 0.2 + rng.random() * 0.6; // Fractal weight
+    const weight3 = 0.2 + rng.random() * 0.6; // Ridged weight
+
+    // Individual amplitudes for each terrain type
+    const amplitude1 = 0.05 + rng.random() * 0.15; // Simplex amplitude
+    const amplitude2 = 0.15 + rng.random() * 0.15; // Fractal amplitude
+    const amplitude3 = 0.05 + rng.random() * 0.10; // Ridged amplitude
+
+    // Legacy terrain type for fallback
     const terrainTypeRoll = rng.random();
     let terrainType = 2; // Default to fractal
     if (terrainTypeRoll < 0.50) {
@@ -465,6 +577,15 @@ export function Planet3D({ ipSeed }: Planet3DProps) {
       persistence: 0.5 + rng.random() * 0.05,
       lacunarity: 1.6 + rng.random() * 0.2,
       octaves: 10,
+
+      // Blended terrain parameters
+      useBlended,
+      amplitude1,
+      amplitude2,
+      amplitude3,
+      weight1,
+      weight2,
+      weight3,
 
       // Layer colors
       color1,
@@ -569,7 +690,7 @@ export function Planet3D({ ipSeed }: Planet3DProps) {
   // Animation with key to force remount when seed changes
   const animationKey = useMemo(() => `planet-${ipSeed}`, [ipSeed]);
 
-  useFrame((state, delta) => {
+  useFrame((_, delta) => {
     if (groupRef.current) {
       groupRef.current.rotation.y += delta * planetParams.rotationSpeed * 0.2;
     }
@@ -607,6 +728,15 @@ export function Planet3D({ ipSeed }: Planet3DProps) {
             persistence: { value: planetParams.persistence },
             lacunarity: { value: planetParams.lacunarity },
             octaves: { value: planetParams.octaves },
+
+            // Blended terrain parameters
+            useBlended: { value: planetParams.useBlended },
+            amplitude1: { value: planetParams.amplitude1 },
+            amplitude2: { value: planetParams.amplitude2 },
+            amplitude3: { value: planetParams.amplitude3 },
+            weight1: { value: planetParams.weight1 },
+            weight2: { value: planetParams.weight2 },
+            weight3: { value: planetParams.weight3 },
 
             // Layer colors
             color1: { value: planetParams.color1 },
