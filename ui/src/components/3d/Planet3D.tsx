@@ -410,59 +410,59 @@ export function Planet3D({ ipSeed }: Planet3DProps) {
       terrainType = 3; // ridged fractal
     }
 
-    // Generate planet color palette
-    const hue = rng.random();
-    const saturation = 0.5 + rng.random() * 0.5;
+    // Generate planet color palette with realistic terrain colors
+    const planetType = rng.random();
 
-    const color1 = new THREE.Color().setHSL(
-      (hue + 0.5) % 1.0,
-      saturation * 0.9,
-      0.2 + rng.random() * 0.1
-    ); // Deep water / base
+    let color1, color2, color3, color4, color5, atmosphereColor;
 
-    const color2 = new THREE.Color().setHSL(
-      (hue + 0.55) % 1.0,
-      saturation * 0.7,
-      0.3 + rng.random() * 0.15
-    ); // Shallow water / lowland
-
-    const color3 = new THREE.Color().setHSL(
-      (hue + 0.05) % 1.0,
-      saturation * 0.8,
-      0.4 + rng.random() * 0.2
-    ); // Land / midland
-
-    const color4 = new THREE.Color().setHSL(
-      (hue + 0.1) % 1.0,
-      saturation * 0.5,
-      0.5 + rng.random() * 0.2
-    ); // Higher elevations
-
-    const color5 = new THREE.Color().setHSL(
-      0.0,
-      0.0,
-      0.9 + rng.random() * 0.1
-    ); // Mountain peaks / ice caps
-
-    // Atmosphere color
-    const atmosphereColor = new THREE.Color().setHSL(
-      (hue + 0.1) % 1.0,
-      0.6,
-      0.7
-    );
-
-    // Generate radius and other parameters
-    const radius = 1 + rng.random() * 0.5; // Radius between 1 and 1.5
+    if (planetType < 0.3) {
+      // Ocean world - blues and teals
+      const baseHue = 0.5 + rng.random() * 0.15; // Blue-cyan range
+      color1 = new THREE.Color().setHSL(baseHue, 0.8, 0.15); // Deep ocean
+      color2 = new THREE.Color().setHSL(baseHue + 0.05, 0.7, 0.25); // Shallow water
+      color3 = new THREE.Color().setHSL(0.1 + rng.random() * 0.1, 0.6, 0.35); // Sandy shores
+      color4 = new THREE.Color().setHSL(0.3, 0.5, 0.4); // Vegetation
+      color5 = new THREE.Color().setHSL(0.0, 0.0, 0.85); // Ice caps
+      atmosphereColor = new THREE.Color().setHSL(baseHue, 0.4, 0.7);
+    } else if (planetType < 0.6) {
+      // Desert world - browns and oranges
+      const baseHue = 0.05 + rng.random() * 0.08; // Orange-brown range
+      color1 = new THREE.Color().setHSL(baseHue, 0.4, 0.2); // Dark soil
+      color2 = new THREE.Color().setHSL(baseHue + 0.02, 0.5, 0.3); // Rich earth
+      color3 = new THREE.Color().setHSL(baseHue + 0.03, 0.6, 0.45); // Sandy terrain
+      color4 = new THREE.Color().setHSL(baseHue + 0.05, 0.7, 0.6); // Light sand
+      color5 = new THREE.Color().setHSL(0.0, 0.0, 0.8); // Rocky peaks
+      atmosphereColor = new THREE.Color().setHSL(baseHue + 0.1, 0.3, 0.65);
+    } else if (planetType < 0.8) {
+      // Forest world - greens and browns
+      const greenHue = 0.25 + rng.random() * 0.15; // Green range
+      const brownHue = 0.08 + rng.random() * 0.05; // Brown range
+      color1 = new THREE.Color().setHSL(brownHue, 0.6, 0.2); // Dark soil
+      color2 = new THREE.Color().setHSL(brownHue, 0.5, 0.3); // Rich earth
+      color3 = new THREE.Color().setHSL(greenHue, 0.6, 0.35); // Forest floor
+      color4 = new THREE.Color().setHSL(greenHue - 0.05, 0.7, 0.4); // Dense vegetation
+      color5 = new THREE.Color().setHSL(0.0, 0.0, 0.75); // Mountain stone
+      atmosphereColor = new THREE.Color().setHSL(greenHue, 0.3, 0.65);
+    } else {
+      // Volcanic/exotic world - reds and purples
+      const baseHue = 0.85 + rng.random() * 0.15; // Red-purple range
+      color1 = new THREE.Color().setHSL(baseHue, 0.7, 0.15); // Dark volcanic rock
+      color2 = new THREE.Color().setHSL(baseHue + 0.05, 0.6, 0.25); // Mineral deposits
+      color3 = new THREE.Color().setHSL(baseHue + 0.1, 0.5, 0.4); // Oxidized terrain
+      color4 = new THREE.Color().setHSL(baseHue - 0.1, 0.8, 0.5); // Exotic minerals
+      color5 = new THREE.Color().setHSL(0.0, 0.0, 0.9); // Metallic peaks
+      atmosphereColor = new THREE.Color().setHSL(baseHue, 0.4, 0.6);
+    }
 
     const tParams = {
       // Terrain parameters
       type: terrainType,
-      radius,
-      amplitude: (terrainType == 2 ? 0.25 : 0.05) + rng.random() * 0.05,
+      radius: 1,
+      amplitude: ((terrainType == 2 ? 0.25 : 0.05) + rng.random() * 0.05),
       sharpness: 2.6,
       offset: -0.01,
       period: 0.5 + rng.random() * 0.6,
-      persistence: 0.4 + rng.random() * 0.2,
+      persistence: 0.5 + rng.random() * 0.05,
       lacunarity: 1.6 + rng.random() * 0.2,
       octaves: 10,
 
