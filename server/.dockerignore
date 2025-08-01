@@ -1,0 +1,35 @@
+# Ignore compiled binaries
+spacenet
+server
+
+# Ignore SQLite databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Ignore test files and coverage reports
+*_test.go
+*.out
+coverage.html
+
+# Ignore git files
+.git
+.gitignore
+
+# Ignore documentation
+README.md
+*.md
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore Docker files (to avoid recursive copying)
+Dockerfile*
+.dockerignore
+
+# Ignore logs
+*.log
