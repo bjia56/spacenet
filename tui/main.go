@@ -76,7 +76,6 @@ func (ut *UnitTables) SetWidth(width int) {
 	}
 }
 
-
 // Block granularity mappings
 var subnetMappings = [8]int{
 	t16:  16,
@@ -161,7 +160,7 @@ func (m *Model) SendClaim(ip string) (string, error) {
 
 	// Send HTTP POST request to server
 	serverURL := fmt.Sprintf("http://%s:%d/api/claim/%s", m.serverAddr, m.httpPort, ip)
-	
+
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", serverURL, strings.NewReader(string(data)))
 	if err != nil {
@@ -177,7 +176,7 @@ func (m *Model) SendClaim(ip string) (string, error) {
 
 	// Check response status
 	if resp.StatusCode == http.StatusCreated {
-		return fmt.Sprintf("Claim sent! Nonce: %d", pow.Nonce), nil
+		return "Claim sent!", nil
 	} else {
 		return "", fmt.Errorf("server returned status: %d", resp.StatusCode)
 	}
