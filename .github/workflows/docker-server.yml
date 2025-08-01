@@ -17,7 +17,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/server
+  IMAGE_NAME: ${{ github.repository }}/spacenet-server
 
 jobs:
   build-and-publish:

@@ -51,11 +51,11 @@ To use the published Docker image:
 
 ```bash
 # Pull the latest image
-docker pull ghcr.io/bjia56/spacenet/server:latest
+docker pull ghcr.io/bjia56/spacenet/spacenet-server:latest
 
 # Run with default settings
-docker run -p 8080:8080 ghcr.io/bjia56/spacenet/server:latest
+docker run -p 8080:8080 ghcr.io/bjia56/spacenet/spacenet-server:latest
 
 # Run with persistent database
-docker run -p 8080:8080 -v $(pwd)/data:/app/data ghcr.io/bjia56/spacenet/server:latest
+docker run -p 8080:8080 -v $(pwd)/data:/app/data ghcr.io/bjia56/spacenet/spacenet-server:latest
 ```
