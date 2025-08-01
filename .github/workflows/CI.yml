@@ -53,10 +53,36 @@ jobs:
         path: tui/coverage.out
         retention-days: 7
 
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.5'
+        
+    - name: Lint Server
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: latest
+        working-directory: server
+        args: --timeout=5m
+        
+    - name: Lint TUI
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: latest
+        working-directory: tui
+        args: --timeout=5m
+
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, lint]
     
     strategy:
       matrix:
