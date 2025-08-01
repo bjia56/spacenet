@@ -58,6 +58,7 @@ jobs:
             type=semver,pattern={{major}}
             # set edge tag for main branch
             type=edge,branch=main
+            type=sha,format=long
             # latest tag
             type=raw,value=latest,enable={{is_default_branch}}
           labels: |
