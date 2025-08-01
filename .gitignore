@@ -35,3 +35,6 @@ go.work.sum
 
 # Log
 *.log
+
+# db
+*.db

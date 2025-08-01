@@ -447,6 +447,164 @@ func TestServerStop_Graceful(t *testing.T) {
 	// The main verification is that Stop() completed gracefully without hanging
 }
 
+// TestHTTPServer_DuplicateClaimHandling tests HTTP endpoint behavior with duplicate claims
+func TestHTTPServer_DuplicateClaimHandling(t *testing.T) {
+	server := NewServerWithOptions(ServerOptions{
+		HTTPPort: 0,
+	})
+
+	err := server.Start()
+	require.NoError(t, err, "Server should start successfully")
+	defer server.Stop()
+
+	httpPort, err := server.WaitForHTTPPort(5 * time.Second)
+	require.NoError(t, err, "HTTP port should be assigned within timeout")
+
+	baseURL := fmt.Sprintf("http://localhost:%d", httpPort)
+	targetIP := "2001:db8::1"
+	testUser := "testuser"
+
+	// Send initial claim
+	resp := makeHTTPClaimRequest(t, baseURL, targetIP, testUser, 8)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp.StatusCode, "Initial claim should be accepted")
+
+	// Verify claim exists
+	claimant, exists := server.store.GetClaim(targetIP)
+	assert.True(t, exists, "Initial claim should exist")
+	assert.Equal(t, testUser, claimant, "Initial claimant should match")
+
+	// Get initial subnet stats
+	stats, ok := server.store.GetSubnetStats("2001:db8::1/128")
+	require.True(t, ok, "Should get initial subnet stats")
+	initialPercentage := stats.Percentage
+
+	// Send duplicate claim (same user, same IP) - need higher difficulty due to claim bonus
+	resp = makeHTTPClaimRequest(t, baseURL, targetIP, testUser, 12)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp.StatusCode, "Duplicate claim should still be accepted by HTTP")
+
+	// Verify claim still exists and hasn't changed
+	claimant, exists = server.store.GetClaim(targetIP)
+	assert.True(t, exists, "Claim should still exist after duplicate")
+	assert.Equal(t, testUser, claimant, "Claimant should still be the same")
+
+	// Most importantly: verify stats haven't inflated
+	stats, ok = server.store.GetSubnetStats("2001:db8::1/128")
+	require.True(t, ok, "Should still get subnet stats")
+	assert.Equal(t, initialPercentage, stats.Percentage, "Percentage should not change after duplicate claim")
+	assert.LessOrEqual(t, stats.Percentage, 100.0, "Percentage should never exceed 100%")
+
+	// Verify we still have only one claim total
+	allClaims := server.store.GetAllClaims()
+	assert.Len(t, allClaims, 1, "Should still have exactly one claim")
+}
+
+// TestHTTPServer_MultipleDuplicateClaimsPercentage tests that multiple duplicate claims
+// via HTTP don't cause percentage inflation
+func TestHTTPServer_MultipleDuplicateClaimsPercentage(t *testing.T) {
+	server := NewServerWithOptions(ServerOptions{
+		HTTPPort: 0,
+	})
+
+	err := server.Start()
+	require.NoError(t, err, "Server should start successfully")
+	defer server.Stop()
+
+	httpPort, err := server.WaitForHTTPPort(5 * time.Second)
+	require.NoError(t, err, "HTTP port should be assigned within timeout")
+
+	baseURL := fmt.Sprintf("http://localhost:%d", httpPort)
+	targetIP := "2001:db8::1"
+	testUser := "testuser"
+
+	// Send initial claim
+	resp := makeHTTPClaimRequest(t, baseURL, targetIP, testUser, 8)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp.StatusCode, "Initial claim should be accepted")
+
+	// Get initial stats for comparison
+	stats, ok := server.store.GetSubnetStats("2001:db8::1/128")
+	require.True(t, ok, "Should get initial subnet stats")
+	initialPercentage := stats.Percentage
+
+	// Send multiple duplicate claims - need higher difficulty due to claim bonus
+	for i := 0; i < 5; i++ {
+		resp := makeHTTPClaimRequest(t, baseURL, targetIP, testUser, 12)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusCreated, resp.StatusCode, "Duplicate claim %d should be accepted", i+1)
+	}
+
+	// Verify stats remain unchanged
+	stats, ok = server.store.GetSubnetStats("2001:db8::1/128")
+	require.True(t, ok, "Should still get subnet stats after multiple duplicates")
+	assert.Equal(t, initialPercentage, stats.Percentage, "Percentage should remain unchanged after multiple duplicates")
+	assert.LessOrEqual(t, stats.Percentage, 100.0, "Percentage should never exceed 100%")
+
+	// Verify we still have only one claim
+	allClaims := server.store.GetAllClaims()
+	assert.Len(t, allClaims, 1, "Should still have exactly one claim after multiple duplicates")
+}
+
+// TestHTTPServer_SubnetStatsWithDuplicates tests that subnet stats API returns
+// correct percentages even when duplicate claims were processed
+func TestHTTPServer_SubnetStatsWithDuplicates(t *testing.T) {
+	server := NewServerWithOptions(ServerOptions{
+		HTTPPort: 0,
+	})
+
+	err := server.Start()
+	require.NoError(t, err, "Server should start successfully")
+	defer server.Stop()
+
+	httpPort, err := server.WaitForHTTPPort(5 * time.Second)
+	require.NoError(t, err, "HTTP port should be assigned within timeout")
+
+	baseURL := fmt.Sprintf("http://localhost:%d", httpPort)
+	testUser := "testuser"
+
+	// Make claims in a subnet and duplicates
+	ips := []string{
+		"2001:db8::1",
+		"2001:db8::2",
+		"2001:db8::3",
+	}
+
+	difficulty := uint8(8)
+	for i, ip := range ips {
+		// Initial claim
+		resp := makeHTTPClaimRequest(t, baseURL, ip, testUser, difficulty+uint8(i)*4)
+		resp.Body.Close()
+		assert.Equal(t, http.StatusCreated, resp.StatusCode, "Claim for %s should be accepted", ip)
+
+		// Duplicate claim
+		resp = makeHTTPClaimRequest(t, baseURL, ip, testUser, difficulty+uint8(i)*4+4)
+		resp.Body.Close()
+		assert.Equal(t, http.StatusCreated, resp.StatusCode, "Duplicate claim for %s should be accepted", ip)
+	}
+
+	// Test subnet stats via HTTP API
+	resp, err := http.Get(fmt.Sprintf("%s/api/subnet/2001:db8::/112", baseURL))
+	require.NoError(t, err, "Subnet stats request should succeed")
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Subnet stats should return 200")
+
+	var statsResp api.SubnetResponse
+	err = json.NewDecoder(resp.Body).Decode(&statsResp)
+	require.NoError(t, err, "Stats response should decode successfully")
+
+	// Verify stats are reasonable (never exceed 100%)
+	assert.LessOrEqual(t, statsResp.Percentage, 100.0, "HTTP API should return percentage <= 100%")
+	assert.GreaterOrEqual(t, statsResp.Percentage, 0.0, "HTTP API should return non-negative percentage")
+
+	t.Logf("HTTP API Subnet stats: Owner=%s, Percentage=%.6f%%", statsResp.Owner, statsResp.Percentage)
+
+	// Verify we have exactly the expected number of claims (no duplicates counted)
+	allClaims := server.store.GetAllClaims()
+	assert.Len(t, allClaims, len(ips), "Should have exactly %d unique claims", len(ips))
+}
+
 // TestClaimStore_ConcurrentAccess tests concurrent access to claim store
 func TestClaimStore_ConcurrentAccess(t *testing.T) {
 	store := NewClaimStore()

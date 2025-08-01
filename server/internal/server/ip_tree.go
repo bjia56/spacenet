@@ -64,6 +64,11 @@ func NewIPTree() *IPTree {
 
 // processClaim updates the tree with a new claim
 func (t *IPTree) processClaim(ipAddr string, claimant string, oldClaimant string) {
+	// If this is a duplicate claim by the same claimant, do nothing
+	if oldClaimant != "" && oldClaimant == claimant {
+		return
+	}
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
