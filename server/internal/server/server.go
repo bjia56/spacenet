@@ -116,7 +116,9 @@ func (s *Server) Stop() {
 	s.stopHTTPServer()
 
 	if s.store != nil {
-		s.store.Close()
+		if err := s.store.Close(); err != nil {
+			log.Printf("Error closing store during shutdown: %v", err)
+		}
 	}
 }
 

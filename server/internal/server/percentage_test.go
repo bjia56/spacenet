@@ -277,7 +277,11 @@ func TestClaimStore_PercentageAccuracyWithSQLite(t *testing.T) {
 	// Test with temporary SQLite database
 	store, err := NewClaimStoreWithSQLite(":memory:")
 	require.NoError(t, err, "Should create SQLite store")
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Logf("Error closing store: %v", err)
+		}
+	}()
 
 	testUser := "testuser"
 

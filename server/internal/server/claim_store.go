@@ -2,6 +2,7 @@ package server
 
 import (
 	"database/sql"
+	"log"
 	"sync"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -81,7 +82,11 @@ func (cs *ClaimStore) loadFromSQLite() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("Error closing rows: %v", err)
+		}
+	}()
 
 	for rows.Next() {
 		var ipAddr, claimant string

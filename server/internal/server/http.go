@@ -88,7 +88,7 @@ func (h *HTTPHandler) handleGetStatsBySubnet(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Convert to response format
-	var response *api.SubnetResponse = stats
+	response := stats
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {

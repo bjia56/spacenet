@@ -39,19 +39,28 @@ func init() {
 
 	for strKey, value := range namesData.Adjectives {
 		var key int
-		fmt.Sscanf(strKey, "%d", &key)
+		if _, err := fmt.Sscanf(strKey, "%d", &key); err != nil {
+			// Skip invalid keys
+			continue
+		}
 		adjectives[key] = value
 	}
 
 	for strKey, value := range namesData.Nouns {
 		var key int
-		fmt.Sscanf(strKey, "%d", &key)
+		if _, err := fmt.Sscanf(strKey, "%d", &key); err != nil {
+			// Skip invalid keys
+			continue
+		}
 		nouns[key] = value
 	}
 
 	for strKey, value := range namesData.CelestialTypes {
 		var key int
-		fmt.Sscanf(strKey, "%d", &key)
+		if _, err := fmt.Sscanf(strKey, "%d", &key); err != nil {
+			// Skip invalid keys
+			continue
+		}
 		celestialTypes[key] = value
 	}
 }

@@ -12,7 +12,11 @@ import (
 // don't inflate statistics or cause issues
 func TestClaimStore_DuplicateClaimHandling(t *testing.T) {
 	store := NewClaimStore()
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Logf("Error closing store: %v", err)
+		}
+	}()
 
 	testIP := "2001:db8::1"
 	testUser := "testuser"
@@ -55,7 +59,11 @@ func TestClaimStore_DuplicateClaimHandling(t *testing.T) {
 // don't cause exponential inflation of statistics
 func TestClaimStore_MultipleDuplicateClaims(t *testing.T) {
 	store := NewClaimStore()
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Logf("Error closing store: %v", err)
+		}
+	}()
 
 	testIP := "2001:db8::1"
 	testUser := "testuser"
@@ -90,7 +98,11 @@ func TestClaimStore_MultipleDuplicateClaims(t *testing.T) {
 // differently from legitimate claim takeovers
 func TestClaimStore_DuplicateVsDifferentUser(t *testing.T) {
 	store := NewClaimStore()
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Logf("Error closing store: %v", err)
+		}
+	}()
 
 	testIP := "2001:db8::1"
 	user1 := "user1"
@@ -129,7 +141,11 @@ func TestClaimStore_DuplicateVsDifferentUser(t *testing.T) {
 // calculated correctly and never exceed 100%
 func TestClaimStore_SubnetPercentageAccuracy(t *testing.T) {
 	store := NewClaimStore()
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Logf("Error closing store: %v", err)
+		}
+	}()
 
 	testUser := "testuser"
 
@@ -232,7 +248,11 @@ func TestIPTree_ProcessClaimTakeoverHandling(t *testing.T) {
 // don't cause race conditions or stat inflation
 func TestClaimStore_ConcurrentDuplicateClaims(t *testing.T) {
 	store := NewClaimStore()
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Logf("Error closing store: %v", err)
+		}
+	}()
 
 	testIP := "2001:db8::1"
 	testUser := "testuser"

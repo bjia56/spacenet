@@ -172,7 +172,11 @@ func (m *Model) SendClaim(ip string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to send request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("Error closing response body: %v", err)
+		}
+	}()
 
 	// Check response status
 	if resp.StatusCode == http.StatusCreated {
@@ -222,7 +226,11 @@ func (m *Model) FetchClaims(prefix string, level level, start, end int) {
 			log.Printf("Error fetching claims: %v", err)
 			return
 		}
-		defer resp.Body.Close()
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				log.Printf("Error closing response body: %v", err)
+			}
+		}()
 
 		if resp.StatusCode != http.StatusOK {
 			log.Printf("Error fetching claims: %s %v", serverUrl, resp.StatusCode)
@@ -351,7 +359,11 @@ func main() {
 		fmt.Println("Fatal:", err)
 		os.Exit(1)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Printf("Error closing log file: %v", err)
+		}
+	}()
 
 	// Initialize the TUI
 	p := tea.NewProgram(Initialize(*server, *httpPort, *name), tea.WithAltScreen())

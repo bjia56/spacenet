@@ -43,7 +43,10 @@ func TestCalculateDifficulty(t *testing.T) {
 	}
 
 	// Claim the address
-	store.ProcessClaim("2001:db8::1", "alice")
+	err := store.ProcessClaim("2001:db8::1", "alice")
+	if err != nil {
+		t.Fatalf("Failed to process claim: %v", err)
+	}
 
 	// Test claimed address
 	difficulty = store.CalculateDifficulty("2001:db8::1")
@@ -55,8 +58,14 @@ func TestCalculateDifficulty(t *testing.T) {
 	// Claim contiguous addresses in the same /124 block
 	// 2001:db8::1 is in the /124 block 2001:db8::/124
 	// Let's claim a few more addresses in this block
-	store.ProcessClaim("2001:db8::2", "alice")
-	store.ProcessClaim("2001:db8::3", "alice")
+	err = store.ProcessClaim("2001:db8::2", "alice")
+	if err != nil {
+		t.Fatalf("Failed to process claim: %v", err)
+	}
+	err = store.ProcessClaim("2001:db8::3", "alice")
+	if err != nil {
+		t.Fatalf("Failed to process claim: %v", err)
+	}
 
 	// Check difficulty for another address in the same block
 	difficulty = store.CalculateDifficulty("2001:db8::4")

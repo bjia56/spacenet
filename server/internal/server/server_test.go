@@ -113,7 +113,11 @@ func TestHTTPHandlerBasicOperations(t *testing.T) {
 	// Test health endpoint
 	resp, err := http.Get(fmt.Sprintf("%s/health", baseURL))
 	require.NoError(t, err, "Health check request should succeed")
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "Health check should return 200")
 
@@ -124,7 +128,11 @@ func TestHTTPHandlerBasicOperations(t *testing.T) {
 	// Test get claim endpoint
 	resp, err = http.Get(fmt.Sprintf("%s/api/ip/2001:db8::1", baseURL))
 	require.NoError(t, err, "Get claim request should succeed")
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "Get claim should return 200")
 
@@ -137,7 +145,11 @@ func TestHTTPHandlerBasicOperations(t *testing.T) {
 	// Test non-existent claim
 	resp, err = http.Get(fmt.Sprintf("%s/api/ip/2001:db8::999", baseURL))
 	require.NoError(t, err, "Non-existent claim request should succeed")
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "Non-existent claim should return 404")
 }
@@ -163,7 +175,11 @@ func TestHTTPClaimProcessing(t *testing.T) {
 	// Make HTTP claim request
 	targetIP := "2001:db8::1"
 	resp := makeHTTPClaimRequest(t, baseURL, targetIP, "testuser", 8)
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 
 	// Verify claim was accepted
 	assert.Equal(t, http.StatusCreated, resp.StatusCode, "HTTP claim should return 201 Created")
@@ -225,7 +241,11 @@ func TestServerIntegration(t *testing.T) {
 	baseURL := fmt.Sprintf("http://localhost:%d", httpPort)
 	resp, err := http.Get(fmt.Sprintf("%s/api/ip/%s", baseURL, testIP))
 	require.NoError(t, err, "HTTP request should succeed")
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "API request should return 200")
 
@@ -254,7 +274,11 @@ func TestHTTPHandler_InvalidIPAddress(t *testing.T) {
 	// Test invalid IP address format
 	resp, err := http.Get(fmt.Sprintf("%s/api/ip/invalid-ip", baseURL))
 	require.NoError(t, err, "Request should succeed")
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Invalid IP should return 400")
 }
@@ -283,7 +307,11 @@ func TestHTTPHandler_SubnetStats(t *testing.T) {
 	// Test subnet stats endpoint
 	resp, err := http.Get(fmt.Sprintf("%s/api/subnet/2001:db8::/64", baseURL))
 	require.NoError(t, err, "Subnet stats request should succeed")
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "Subnet stats should return 200")
 
@@ -313,7 +341,11 @@ func TestHTTPHandler_InvalidSubnet(t *testing.T) {
 	// Test invalid subnet format
 	resp, err := http.Get(fmt.Sprintf("%s/api/subnet/invalid-subnet/prefix", baseURL))
 	require.NoError(t, err, "Request should succeed")
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Invalid subnet should return 400")
 }
@@ -336,14 +368,22 @@ func TestHTTPServer_InvalidPayload(t *testing.T) {
 	// Test empty payload
 	resp, err := http.Post(fmt.Sprintf("%s/api/claim/2001:db8::1", baseURL), "application/json", bytes.NewBuffer([]byte{}))
 	require.NoError(t, err, "Empty HTTP payload should be sent")
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Empty payload should return 400")
 
 	// Test invalid JSON
 	resp, err = http.Post(fmt.Sprintf("%s/api/claim/2001:db8::1", baseURL), "application/json", bytes.NewBuffer([]byte("invalid json")))
 	require.NoError(t, err, "Invalid JSON should be sent")
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Invalid JSON should return 400")
 
@@ -383,7 +423,11 @@ func TestHTTPServer_PayloadValidation(t *testing.T) {
 
 	resp, err := http.Post(fmt.Sprintf("%s/api/claim/2001:db8::1", baseURL), "application/json", bytes.NewBuffer(reqBody))
 	require.NoError(t, err, "Request should be sent")
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Oversized claimant should return 400")
 
@@ -398,7 +442,11 @@ func TestHTTPServer_PayloadValidation(t *testing.T) {
 
 	resp, err = http.Post(fmt.Sprintf("%s/api/claim/invalid-ip", baseURL), "application/json", bytes.NewBuffer(reqBody))
 	require.NoError(t, err, "Request should be sent")
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Invalid IP should return 400")
 
@@ -466,7 +514,11 @@ func TestHTTPServer_DuplicateClaimHandling(t *testing.T) {
 
 	// Send initial claim
 	resp := makeHTTPClaimRequest(t, baseURL, targetIP, testUser, 8)
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode, "Initial claim should be accepted")
 
 	// Verify claim exists
@@ -481,7 +533,11 @@ func TestHTTPServer_DuplicateClaimHandling(t *testing.T) {
 
 	// Send duplicate claim (same user, same IP) - need higher difficulty due to claim bonus
 	resp = makeHTTPClaimRequest(t, baseURL, targetIP, testUser, 12)
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode, "Duplicate claim should still be accepted by HTTP")
 
 	// Verify claim still exists and hasn't changed
@@ -520,7 +576,11 @@ func TestHTTPServer_MultipleDuplicateClaimsPercentage(t *testing.T) {
 
 	// Send initial claim
 	resp := makeHTTPClaimRequest(t, baseURL, targetIP, testUser, 8)
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode, "Initial claim should be accepted")
 
 	// Get initial stats for comparison
@@ -531,7 +591,11 @@ func TestHTTPServer_MultipleDuplicateClaimsPercentage(t *testing.T) {
 	// Send multiple duplicate claims - need higher difficulty due to claim bonus
 	for i := 0; i < 5; i++ {
 		resp := makeHTTPClaimRequest(t, baseURL, targetIP, testUser, 12)
-		defer resp.Body.Close()
+		defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 		assert.Equal(t, http.StatusCreated, resp.StatusCode, "Duplicate claim %d should be accepted", i+1)
 	}
 
@@ -574,19 +638,27 @@ func TestHTTPServer_SubnetStatsWithDuplicates(t *testing.T) {
 	for i, ip := range ips {
 		// Initial claim
 		resp := makeHTTPClaimRequest(t, baseURL, ip, testUser, difficulty+uint8(i)*4)
-		resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
 		assert.Equal(t, http.StatusCreated, resp.StatusCode, "Claim for %s should be accepted", ip)
 
 		// Duplicate claim
 		resp = makeHTTPClaimRequest(t, baseURL, ip, testUser, difficulty+uint8(i)*4+4)
-		resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
 		assert.Equal(t, http.StatusCreated, resp.StatusCode, "Duplicate claim for %s should be accepted", ip)
 	}
 
 	// Test subnet stats via HTTP API
 	resp, err := http.Get(fmt.Sprintf("%s/api/subnet/2001:db8::/112", baseURL))
 	require.NoError(t, err, "Subnet stats request should succeed")
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "Subnet stats should return 200")
 
@@ -608,7 +680,11 @@ func TestHTTPServer_SubnetStatsWithDuplicates(t *testing.T) {
 // TestClaimStore_ConcurrentAccess tests concurrent access to claim store
 func TestClaimStore_ConcurrentAccess(t *testing.T) {
 	store := NewClaimStore()
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Logf("Error closing store: %v", err)
+		}
+	}()
 
 	const numGoroutines = 10
 	const claimsPerGoroutine = 10
@@ -668,7 +744,11 @@ func TestHTTPServer_ClaimOverwrite(t *testing.T) {
 
 	// Send first claim with base difficulty (8)
 	resp := makeHTTPClaimRequest(t, baseURL, targetIP, "firstuser", 8)
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode, "First claim should be accepted")
 
 	// Verify first claim was processed
@@ -679,7 +759,11 @@ func TestHTTPServer_ClaimOverwrite(t *testing.T) {
 	// Send second claim to overwrite the first
 	// Need higher difficulty (12) since address is already claimed (8 base + 4 claim bonus)
 	resp = makeHTTPClaimRequest(t, baseURL, targetIP, "seconduser", 12)
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode, "Second claim should be accepted")
 
 	// Verify claim was overwritten
