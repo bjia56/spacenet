@@ -48,23 +48,6 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            # set latest tag for default branch
-            type=ref,event=branch
-            type=ref,event=pr
-            # set semver tags for releases
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            # set edge tag for main branch
-            type=edge,branch=main
-            type=sha,format=long
-            # latest tag
-            type=raw,value=latest,enable={{is_default_branch}}
-          labels: |
-            org.opencontainers.image.title=SpaceNet Server
-            org.opencontainers.image.description=IPv6 territory control game server
-            org.opencontainers.image.vendor=${{ github.repository_owner }}
 
       - name: Build and push Docker image
         id: build-and-push
@@ -139,7 +122,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main
           format: 'sarif'
           output: 'trivy-results.sarif'
 
