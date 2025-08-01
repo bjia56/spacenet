@@ -107,7 +107,7 @@ export function SpaceNetBrowser({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          nonce: 0, // TODO: Solve proof-of-work to get valid nonce
+          nonce: "0", // TODO: Solve proof-of-work to get valid nonce
           name: playerName
         })
       });

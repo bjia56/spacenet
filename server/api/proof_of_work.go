@@ -3,7 +3,6 @@ package api
 
 import (
 	"crypto/sha256"
-	"encoding/binary"
 	"fmt"
 	"net"
 )
@@ -12,7 +11,7 @@ import (
 type ProofOfWork struct {
 	Target net.IP // IPv6 address being claimed
 	Name   string // Name of the claimant
-	Nonce  uint64 // Nonce used to solve the challenge
+	Nonce  string // Nonce used to solve the challenge
 }
 
 // Hash computes the SHA-256 hash of the proof of work data
@@ -26,10 +25,8 @@ func (pow *ProofOfWork) Hash() [32]byte {
 	// Add claimant name
 	data = append(data, []byte(pow.Name)...)
 
-	// Add nonce (8 bytes, big endian)
-	nonceBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(nonceBytes, pow.Nonce)
-	data = append(data, nonceBytes...)
+	// Add nonce as string bytes
+	data = append(data, []byte(pow.Nonce)...)
 
 	return sha256.Sum256(data)
 }
@@ -71,7 +68,7 @@ func SolveProofOfWork(target net.IP, claimant string, difficulty uint8, maxAttem
 	}
 
 	for nonce := range maxAttempts {
-		pow.Nonce = nonce
+		pow.Nonce = fmt.Sprintf("%d", nonce)
 		if pow.IsValid(difficulty) {
 			return pow, nil
 		}

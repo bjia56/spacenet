@@ -8,16 +8,10 @@ import (
 )
 
 func TestProofOfWork_IsValid(t *testing.T) {
-	// Test case: known valid proof of work
-	pow := &api.ProofOfWork{
-		Target: net.ParseIP("2001:db8::1"),
-		Name:   "alice",
-		Nonce:  12345,
-	}
 	difficulty := uint8(8) // Example difficulty
 
 	// Find a valid nonce for this difficulty
-	validPow, err := api.SolveProofOfWork(pow.Target, pow.Name, difficulty, 1000000)
+	validPow, err := api.SolveProofOfWork(net.ParseIP("2001:db8::1"), "alice", difficulty, 1000000)
 	if err != nil {
 		t.Fatalf("Failed to solve proof of work: %v", err)
 	}
@@ -30,7 +24,7 @@ func TestProofOfWork_IsValid(t *testing.T) {
 	invalidPow := &api.ProofOfWork{
 		Target: validPow.Target,
 		Name:   validPow.Name,
-		Nonce:  validPow.Nonce + 1, // Wrong nonce
+		Nonce:  validPow.Nonce + "1", // Wrong nonce
 	}
 
 	if invalidPow.IsValid(difficulty) {

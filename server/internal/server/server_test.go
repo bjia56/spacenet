@@ -374,7 +374,7 @@ func TestHTTPServer_PayloadValidation(t *testing.T) {
 	}
 
 	claimReq := api.ClaimRequest{
-		Nonce: 12345,
+		Nonce: "12345",
 		Name:  string(longClaimant),
 	}
 
@@ -389,7 +389,7 @@ func TestHTTPServer_PayloadValidation(t *testing.T) {
 
 	// Test invalid IP address in path
 	claimReq = api.ClaimRequest{
-		Nonce: 12345,
+		Nonce: "12345",
 		Name:  "testuser",
 	}
 
